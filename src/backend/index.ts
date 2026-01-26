@@ -1,8 +1,10 @@
 import { config } from './utils/config';
 import { handleFilesRequest } from './routes/files';
 import { handleBucketsRequest } from './routes/buckets';
+import { handleAuthRequest } from './routes/auth';
 import { addCorsHeaders } from './middleware/cors';
 import { handleError } from './middleware/error';
+import { authenticate, unauthorizedResponse } from './middleware/auth';
 
 /**
  * Main server instance
@@ -26,6 +28,19 @@ const server = Bun.serve({
         if (path[1] === 'v1') {
           const apiPath = path.slice(2); // Remove 'api' and 'v1'
           
+          // Auth routes (unprotected)
+          if (apiPath.length > 0 && apiPath[0] === 'auth') {
+            const authPath = apiPath.slice(1);
+            const response = await handleAuthRequest(request, authPath);
+            return addCorsHeaders(response, request);
+          }
+
+          // Protected routes
+          const user = await authenticate(request);
+          if (!user) {
+            return addCorsHeaders(unauthorizedResponse(), request);
+          }
+
           // Route to appropriate handler
           if (apiPath.length > 0 && apiPath[0] === 'files') {
             const filesPath = apiPath.slice(1); // Remove 'files'
@@ -61,15 +76,24 @@ const server = Bun.serve({
       try {
         const file = Bun.file(filePath);
         const exists = await file.exists();
-        
+
         if (exists) {
           // Determine content type based on file extension
           const ext = filePath.split('.').pop()?.toLowerCase();
           const contentType = getContentType(ext || '');
-          
-          return new Response(file, {
-            headers: { 'Content-Type': contentType }
-          });
+
+          // Add caching headers for static assets
+          const headers: Record<string, string> = {
+            'Content-Type': contentType,
+          };
+
+          // Cache immutable assets (assets folder) for 1 year
+          // Cache other static files for 1 hour
+          if (path[0] === 'assets' || path[0] === 'css' || path[0] === 'js') {
+            headers['Cache-Control'] = 'public, max-age=3600'; // 1 hour for standard assets
+          }
+
+          return new Response(file, { headers });
         }
       } catch (error) {
         console.error('Error serving file:', error);
@@ -95,6 +119,19 @@ console.log(`🚀 S3 Viewer server is running on http://localhost:${config.port}
 console.log(`📊 Server environment: ${config.nodeEnv}`);
 console.log(`🗄️  S3 endpoint: ${config.s3.endpoint}`);
 console.log(`📦 S3 bucket: ${config.s3.bucketName}`);
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server...');
+  server.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down server...');
+  server.stop();
+  process.exit(0);
+});
 
 /**
  * Determines the content type based on file extension

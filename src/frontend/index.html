@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>S3 File Browser - Professional File Management</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/auth.css">
 
 
 
@@ -15,6 +17,51 @@
 </head>
 <body>
     <div id="app" x-data="fileBrowserApp" x-init="init()">
+        <!-- Login Overlay -->
+        <div x-show="!isAuthenticated" class="login-overlay" x-cloak>
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="logo-large">
+                        <img src="/favicon.svg" alt="S3 Viewer">
+                        <h2>S3 File Browser</h2>
+                    </div>
+                    <p>Please sign in to continue</p>
+                </div>
+                
+                <div class="login-body">
+                    <!-- Local Login -->
+                    <template x-if="authConfig?.localEnabled">
+                        <form @submit.prevent="loginLocal" class="local-login-form">
+                            <div class="form-group">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" x-model="loginForm.username" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="password">Password</label>
+                                <input type="password" id="password" x-model="loginForm.password" required>
+                            </div>
+                            <div x-show="loginError" class="auth-error" x-text="loginError"></div>
+                            <button type="submit" class="btn btn-primary btn-block" :disabled="authLoading">
+                                <span x-show="!authLoading">Sign In</span>
+                                <span x-show="authLoading">Signing in...</span>
+                            </button>
+                        </form>
+                    </template>
+
+                    <!-- OIDC Login -->
+                    <template x-if="authConfig?.oidcEnabled">
+                        <div class="oidc-login">
+                            <div class="divider" x-show="authConfig?.localEnabled"><span>OR</span></div>
+                            <button @click="loginOIDC" class="btn btn-secondary btn-block oidc-btn">
+                                <img src="https://www.keycloak.org/resources/images/keycloak_logo_480x135.png" alt="Keycloak" class="oidc-logo">
+                                <span>Sign in with OIDC</span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- Header -->
         <header class="header">
             <div class="container">
@@ -23,6 +70,12 @@
                         <h1>S3 File Browser</h1>
                     </div>
                     <div class="user-info">
+                        <!-- User Profile -->
+                        <div class="user-profile" x-show="isAuthenticated">
+                            <span class="user-name" x-text="user?.username || 'User'"></span>
+                            <button @click="logout" class="btn btn-small btn-secondary">Logout</button>
+                        </div>
+
                         <div class="bucket-selector">
                             <label for="bucket-select">S3 Bucket:</label>
                             <div class="bucket-select-wrapper">
@@ -925,6 +978,7 @@
     </div>
 
     <!-- Core Modules - Load first -->
+    <script src="/js/modules/auth.js"></script>
     <script src="/js/modules/api.js"></script>
     <script src="/js/modules/file-utils.js"></script>
     <script src="/js/modules/notifications.js"></script>

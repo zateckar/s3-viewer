@@ -44,6 +44,17 @@ window.fileBrowserApp = {
     showProgressDashboard: false,
     showImagePreview: false,
     
+    // Auth state
+    isAuthenticated: false,
+    user: null,
+    authConfig: null,
+    authLoading: false,
+    loginError: '',
+    loginForm: {
+        username: '',
+        password: ''
+    },
+
     // Transfer stats
     networkQuality: 'UNKNOWN',
     totalBandwidthUsage: 0,
@@ -59,34 +70,38 @@ window.fileBrowserApp = {
     
     async init() {
         try {
-            // Initialize upload component
-            if (window.UploadComponent) {
-                this.uploadComponent = window.UploadComponent(this.path);
+            // Initialize Auth
+            if (window.Auth) {
+                await window.Auth.init();
+                this.authConfig = window.Auth.config;
+                this.isAuthenticated = window.Auth.isAuthenticated();
+                this.user = window.Auth.user;
+
+                // Handle OIDC Callback
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                if (code && state) {
+                    this.authLoading = true;
+                    try {
+                        const result = await window.Auth.handleCallback(code, state);
+                        if (result.success) {
+                            this.isAuthenticated = true;
+                            this.user = window.Auth.user;
+                            // Clean URL
+                            window.history.replaceState({}, document.title, window.location.pathname);
+                        }
+                    } catch (e) {
+                        this.loginError = e.message;
+                    } finally {
+                        this.authLoading = false;
+                    }
+                }
             }
-            
-            // Load available buckets
-            await this.loadBuckets();
-            
-            // Initialize download component
-            if (window.DownloadProgressComponent) {
-                this.downloadComponentInstance = window.DownloadProgressComponent();
-            }
-            
-            // Initialize progress dashboard
-            if (window.ProgressDashboard) {
-                this.progressDashboardInstance = window.ProgressDashboard();
-                this.startTransferStatsUpdater();
-            }
-            
-            // Initialize image preview component
-            this.initializeImagePreview();
-            
-            // Load initial files
-            await this.loadFiles();
-            
-            // Start download count updater
-            this.startDownloadCountUpdater();
-            
+
+            if (!this.isAuthenticated) return;
+
+            await this.initAfterAuth();
         } catch (error) {
             console.error('Initialization error:', error);
             this.error = 'Failed to initialize application';
@@ -98,10 +113,25 @@ window.fileBrowserApp = {
         
         const imagePreviewComponent = window.ImagePreviewComponent();
         
+        // Fix: Re-initialize and focus on window focus to handle lost event listeners or state
+        window.addEventListener('focus', () => {
+            if (this.showImagePreview && this.imagePreviewInstance) {
+                console.log('🔄 Window refocused, ensuring image preview state...');
+                // Re-focus the viewport to ensure keyboard shortcuts work
+                const viewport = document.querySelector('.image-viewport');
+                if (viewport) viewport.focus();
+            }
+        });
+
         // Set up two-way binding for showImagePreview state
         Object.defineProperty(imagePreviewComponent, 'showImagePreview', {
             get: () => this.showImagePreview,
             set: (value) => { this.showImagePreview = value; }
+        });
+
+        // Set up binding for isAuthenticated to allow component to check auth state
+        Object.defineProperty(imagePreviewComponent, 'isAuthenticated', {
+            get: () => this.isAuthenticated
         });
         
         // Bind Alpine.js utilities
@@ -121,6 +151,67 @@ window.fileBrowserApp = {
         setInterval(() => this.updateDownloadCount(), 1000);
     },
     
+    // ==================== Auth Operations ====================
+
+    async loginLocal() {
+        this.authLoading = true;
+        this.loginError = '';
+        try {
+            const result = await window.Auth.loginLocal(this.loginForm.username, this.loginForm.password);
+            if (result.success) {
+                this.isAuthenticated = true;
+                this.user = window.Auth.user;
+                this.loginForm.username = '';
+                this.loginForm.password = '';
+                await this.initAfterAuth();
+            } else {
+                this.loginError = result.error;
+            }
+        } catch (e) {
+            this.loginError = 'Login failed';
+        } finally {
+            this.authLoading = false;
+        }
+    },
+
+    async loginOIDC() {
+        await window.Auth.loginOIDC();
+    },
+
+    logout() {
+        window.Auth.logout();
+    },
+
+    async initAfterAuth() {
+        // Initialize components that require auth
+        if (window.UploadComponent) {
+            this.uploadComponent = window.UploadComponent(this.path);
+        }
+        
+        // Load available buckets
+        await this.loadBuckets();
+        
+        // Initialize download component
+        if (window.DownloadProgressComponent) {
+            this.downloadComponentInstance = window.DownloadProgressComponent();
+        }
+        
+        // Initialize progress dashboard
+        if (window.ProgressDashboard) {
+            this.progressDashboardInstance = window.ProgressDashboard();
+            this.startTransferStatsUpdater();
+        }
+        
+        // Initialize image preview component
+        this.initializeImagePreview();
+        
+        // Load initial files
+        await this.loadFiles();
+        
+        // Start download count updater
+        this.startDownloadCountUpdater();
+    },
+
     // ==================== File Operations ====================
     
     async loadFiles(currentPath = this.path) {
@@ -558,6 +649,10 @@ window.fileBrowserApp = {
     // ==================== Utility Methods ====================
     
     notify(message, type = 'info') {
+        if (message === 'Unauthorized') {
+            this.logout();
+            return;
+        }
         if (window.Notifications) {
             window.Notifications.show(message, type);
         } else if (window.showNotification) {

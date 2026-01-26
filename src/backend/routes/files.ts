@@ -495,8 +495,15 @@ async function handlePostRequest(request: Request): Promise<Response> {
         return createErrorResponse('INVALID_PATH', pathValidation.error!, null, 400);
       }
 
+      // Fix: Ensure the path used for folder creation ends with a trailing slash
+      // This informs S3 that this is a directory object, not a file.
+      let folderPath = pathValidation.sanitized;
+      if (!folderPath.endsWith('/')) {
+        folderPath += '/';
+      }
+
       await s3Service.createFolder(
-        pathValidation.sanitized, 
+        folderPath,
         bucketValidation.sanitized || undefined
       );
       

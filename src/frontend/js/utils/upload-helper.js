@@ -596,6 +596,15 @@ async function uploadFileStream(uploadState, progressCallback, options = {}) {
         });
 
         xhr.open('POST', uploadUrl);
+
+        // Add auth header if available
+        const authHeader = window.Auth?.getAuthHeader();
+        if (authHeader) {
+            for (const [key, value] of Object.entries(authHeader)) {
+                xhr.setRequestHeader(key, value);
+            }
+        }
+
         xhr.send(formData);
     });
 }
@@ -741,6 +750,15 @@ async function uploadFileStreamEnhanced(uploadState, progressCallback, options =
         });
 
         xhr.open('POST', uploadUrl);
+
+        // Add auth header if available
+        const authHeader = window.Auth?.getAuthHeader();
+        if (authHeader) {
+            for (const [key, value] of Object.entries(authHeader)) {
+                xhr.setRequestHeader(key, value);
+            }
+        }
+
         xhr.send(formData);
     });
 }

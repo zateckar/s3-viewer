@@ -227,7 +227,10 @@ export class S3Service {
     metadataCache.invalidate(this.getMetadataCacheKey(path, targetBucket));
     
     // Invalidate parent path as well
-    const parentPath = path.substring(0, path.lastIndexOf('/')) || '/';
+    // First remove trailing slash to correctly find parent directory
+    const pathWithoutTrailingSlash = path.endsWith('/') ? path.slice(0, -1) : path;
+    const lastSlashIndex = pathWithoutTrailingSlash.lastIndexOf('/');
+    const parentPath = lastSlashIndex > 0 ? pathWithoutTrailingSlash.substring(0, lastSlashIndex) : '/';
     listingCache.invalidate(this.getListingCacheKey(parentPath, targetBucket));
   }
 
@@ -328,7 +331,10 @@ export class S3Service {
         }
       }
       
-      // Add files
+      // Track folder names already added from commonPrefixes
+      const existingFolders = new Set(items.map(item => item.name));
+      
+      // Add files and folder markers from contents
       if (response.contents) {
         for (const object of response.contents) {
           if (object.key && object.key !== prefix) {
@@ -338,8 +344,19 @@ export class S3Service {
               fileName = object.key.substring(prefix.length);
             }
             
-            // Skip folder markers (objects ending with '/')
-            if (fileName.endsWith('/') && fileName.length === 1) {
+            // Handle folder markers (0-byte objects ending with '/')
+            if (fileName.endsWith('/')) {
+              const folderName = fileName.slice(0, -1);
+              if (folderName && !folderName.includes('/') && !existingFolders.has(folderName)) {
+                existingFolders.add(folderName);
+                items.push({
+                  name: folderName,
+                  type: 'folder',
+                  size: 0,
+                  modified: new Date(object.lastModified || Date.now()),
+                  path: '/' + object.key.slice(0, -1),
+                });
+              }
               continue;
             }
             
@@ -423,9 +440,17 @@ export class S3Service {
     const key = path.startsWith('/') ? path.substring(1) : path;
     const folderKey = key.endsWith('/') ? key : key + '/';
 
+    console.log(`=� Creating S3 folder object with key: "${folderKey}" in bucket: "${bucket || this.currentBucket}"`);
+
     try {
       const client = this.getS3Client(bucket);
-      await client.write(folderKey, new Uint8Array(0)); // Empty body for folder
+      // Create a .folder marker file inside the folder
+      // This ensures the folder appears in commonPrefixes when listing
+      // (Some S3-compatible servers like SeaweedFS strip trailing slashes from folder markers)
+      const markerKey = folderKey + '.folder';
+      await client.write(markerKey, new Uint8Array(0), {
+        contentType: 'application/x-folder-marker'
+      });
       
       // Invalidate cache for parent path
       this.invalidateCache(path, bucket);

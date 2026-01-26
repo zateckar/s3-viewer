@@ -290,7 +290,9 @@ window.ImagePreviewComponent = function() {
                         // For streaming URLs, we need to fetch the data and create a blob URL
                         if (imageUrl.includes('/stream')) {
                             console.log('🔄 Fetching streaming image data...');
-                            const response = await fetch(imageUrl);
+                            const response = await fetch(imageUrl, {
+                                headers: { ...window.Auth?.getAuthHeader() }
+                            });
                             
                             if (!response.ok) {
                                 throw new Error(`Stream request failed: ${response.status} ${response.statusText}`);
@@ -414,7 +416,9 @@ window.ImagePreviewComponent = function() {
                 console.log('🔄 Getting fallback URL for path:', imagePath);
                 
                 // Try the download endpoint which returns a presigned URL
-                const response = await fetch(`/api/v1/files/download?path=${encodedPath}${bucketQuery}`);
+                const response = await fetch(`/api/v1/files/download?path=${encodedPath}${bucketQuery}`, {
+                    headers: { ...window.Auth?.getAuthHeader() }
+                });
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -425,7 +429,9 @@ window.ImagePreviewComponent = function() {
                 }
                 
                 // Try the preview endpoint as another fallback
-                const previewResponse = await fetch(`/api/v1/files/preview?path=${encodedPath}${bucketQuery}`);
+                const previewResponse = await fetch(`/api/v1/files/preview?path=${encodedPath}${bucketQuery}`, {
+                    headers: { ...window.Auth?.getAuthHeader() }
+                });
                 if (previewResponse.ok) {
                     const previewData = await previewResponse.json();
                     if (previewData.success && previewData.data?.previewUrl) {

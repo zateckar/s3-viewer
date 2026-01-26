@@ -15,12 +15,16 @@ export function validateS3Path(path: string): boolean {
  * Sanitizes and normalizes a path
  */
 export function normalizePath(path: string): string {
+  const hasTrailingSlash = path.endsWith('/') && path.length > 1;
+  
   // Remove leading and trailing slashes
   let normalized = path.replace(/^\/+/, '').replace(/\/+$/, '');
   
   // Convert multiple slashes to single slash
   normalized = normalized.replace(/\/+/g, '/');
   
-  // Add leading slash if path is not empty
-  return normalized ? '/' + normalized : '/';
+  if (!normalized) return '/';
+  
+  // Add leading slash and restore trailing slash if it was there
+  return '/' + normalized + (hasTrailingSlash ? '/' : '');
 }

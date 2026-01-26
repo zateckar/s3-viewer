@@ -550,7 +550,9 @@ class DownloadQueue {
                 url += `&bucket=${encodeURIComponent(bucket)}`;
             }
             
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: { ...window.Auth?.getAuthHeader() }
+            });
             
             if (response.ok) {
                 const data = await response.json();
@@ -583,7 +585,10 @@ class DownloadQueue {
             };
 
             const response = await fetch(url, {
-                headers,
+                headers: {
+                    ...headers,
+                    ...window.Auth?.getAuthHeader()
+                },
                 signal: download.abortController?.signal
             });
 
@@ -679,6 +684,15 @@ class DownloadQueue {
 
             xhr.open('GET', url);
             xhr.responseType = 'blob';
+
+            // Add auth header
+            const authHeader = window.Auth?.getAuthHeader();
+            if (authHeader) {
+                for (const [key, value] of Object.entries(authHeader)) {
+                    xhr.setRequestHeader(key, value);
+                }
+            }
+
             xhr.send();
         });
     }

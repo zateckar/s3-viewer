@@ -39,6 +39,7 @@ async function apiRequest(method, url, data = null, options = {}) {
     method: method,
     headers: {
       'Content-Type': 'application/json',
+      ...window.Auth?.getAuthHeader(),
       ...options.headers,
     },
     signal: options.signal,
@@ -262,6 +263,15 @@ const FilesAPI = {
       });
 
       xhr.open('POST', url);
+      
+      // Add auth header to XHR
+      const authHeader = window.Auth?.getAuthHeader();
+      if (authHeader) {
+        for (const [key, value] of Object.entries(authHeader)) {
+          xhr.setRequestHeader(key, value);
+        }
+      }
+      
       xhr.send(formData);
     });
   },
