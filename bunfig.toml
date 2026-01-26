@@ -1,0 +1,15 @@
+[install]
+cache = true
+exact = true
+
+[scripts]
+dev = "bun run --watch src/backend/index.ts"
+start = "bun run src/backend/index.ts"
+build = "bun build src/backend/index.ts --outdir dist --target bun"
+test = "bun test"
+lint = "bun eslint src/backend"
+typecheck = "bun tsc --noEmit"
+
+[test]
+preload = "./tests/setup.ts"
+root = "./tests"

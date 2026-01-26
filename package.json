@@ -1,0 +1,28 @@
+{
+  "name": "s3-viewer",
+  "module": "src/backend/index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/backend/index.ts",
+    "start": "bun run src/backend/index.ts",
+    "build": "bun build src/backend/index.ts --outdir dist --target bun",
+    "test": "bun test",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install",
+    "typecheck": "bun tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@playwright/test": "^1.40.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "alpinejs": "3.15.5"
+  }
+}

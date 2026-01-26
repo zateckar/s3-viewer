@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 File Browser - Professional File Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+
+
+
+    <!-- Shared Utilities - Load first before other scripts -->
+    <script src="shared-init.js"></script>
+    
+    <script defer src="/assets/js/alpine.min.js"></script>
+</head>
+<body>
+    <div id="app" x-data="fileBrowserApp" x-init="init()">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <div class="header-content">
+                    <div class="logo">
+                        <h1>S3 File Browser</h1>
+                    </div>
+                    <div class="user-info">
+                        <div class="bucket-selector">
+                            <label for="bucket-select">S3 Bucket:</label>
+                            <div class="bucket-select-wrapper">
+                                <select
+                                    id="bucket-select"
+                                    x-model="currentBucket"
+                                    @change="switchBucket($event.target.value)"
+                                    class="bucket-select-dropdown"
+                                    :disabled="loading"
+                                >
+                                    <template x-for="bucket in availableBuckets" :key="bucket">
+                                        <option
+                                            :value="bucket"
+                                            x-text="bucket"
+                                            :selected="bucket === currentBucket"
+                                            :disabled="getBucketStatus(bucket).class === 'bucket-inaccessible'"
+                                        ></option>
+                                    </template>
+                                </select>
+                                <div class="bucket-status-indicator"
+                                     :class="getBucketStatus(currentBucket).class"
+                                     :title="getBucketStatus(currentBucket).text">
+                                    <span x-text="getBucketStatus(currentBucket).icon"></span>
+                                </div>
+                            </div>
+                            <div class="bucket-status-text" x-show="getBucketStatus(currentBucket).text">
+                                <span x-text="getBucketStatus(currentBucket).text"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <div class="container">
+                <!-- Breadcrumb Navigation -->
+                <nav class="breadcrumb">
+                    <template x-for="(crumb, index) in breadcrumbs" :key="crumb.path">
+                        <span>
+                            <a href="#" @click.prevent="navigateTo(crumb.path)" x-text="crumb.name"></a>
+                            <span x-show="index < breadcrumbs.length - 1" class="breadcrumb-separator">/</span>
+                        </span>
+                    </template>
+                </nav>
+
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <div class="toolbar-left">
+                        <button @click="refreshFiles()" class="btn btn-secondary" :disabled="loading">
+                            <span x-show="!loading">🔄 Refresh</span>
+                            <span x-show="loading">⏳ Loading...</span>
+                        </button>
+                        <button @click="showCreateFolderModal = true" class="btn btn-primary">
+                            📁 New Folder
+                        </button>
+                        <button @click="showUpload()" class="btn btn-primary">
+                            ⬆️ Upload Files
+                        </button>
+                        <button @click="toggleDownloadsPanel()" class="btn btn-secondary" :class="{ 'btn-active': showDownloadsPanel }">
+                            ⬇️ Downloads <span x-show="downloadCount > 0" class="badge" x-text="downloadCount"></span>
+                        </button>
+                        <button @click="toggleProgressDashboard()" class="btn btn-secondary" :class="{ 'btn-active': showProgressDashboard }">
+                            📊 Progress <span x-show="activeTransferCount > 0" class="badge" x-text="activeTransferCount"></span>
+                        </button>
+                    </div>
+                    <div class="toolbar-right">
+                        <div class="selection-controls">
+                            <button @click="selectAllFiles()" class="btn btn-small btn-secondary">Select All</button>
+                            <button @click="clearSelection()" class="btn btn-small btn-secondary">Clear</button>
+                            <button @click="previewSelectedImages()" class="btn btn-small btn-primary">Preview Images</button>
+                            <button @click="downloadSelected()" class="btn btn-small btn-primary">Download Selected</button>
+                        </div>
+                        <span x-text="itemCount + ' items'"></span>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div x-show="error" class="error-message">
+                    <span x-text="error"></span>
+                    <button @click="error = ''" class="close-button">×</button>
+                </div>
+
+                <!-- File List -->
+                <div class="file-list">
+                    <div x-show="loading" class="loading">
+                        <p>Loading files...</p>
+                    </div>
+
+                    <div x-show="!loading && items.length === 0" class="empty-state">
+                        <p>This folder is empty</p>
+                    </div>
+
+                    <template x-for="item in items" :key="item.path">
+                        <div class="file-item"
+                             @click="handleItemClick(item)"
+                             @dblclick="item.type === 'file' && isImageFile(item) ? previewImage(item) : handleItemDoubleClick(item)"
+                             x-data="{ item }">
+                            <div class="file-select">
+                                <input type="checkbox" class="file-select-checkbox" @click.stop>
+                            </div>
+                            <div class="file-icon">
+                                <span x-text="getFileIcon(item.type, item.name)"></span>
+                            </div>
+                            <div class="file-name" x-text="item.name"></div>
+                            <div class="file-size" x-text="formatSize(item.size)"></div>
+                            <div class="file-date" x-text="formatDate(item.modified)"></div>
+                            <div class="file-actions">
+                                <button
+                                    x-show="item.type === 'file' && isImageFile(item)"
+                                    @click.stop="previewImage(item)"
+                                    class="btn btn-small btn-primary"
+                                    title="Preview Image">
+                                    👁️
+                                </button>
+                                <button
+                                    x-show="item.type === 'file'"
+                                    @click.stop="downloadItem(item)"
+                                    class="btn btn-small btn-secondary"
+                                    title="Download">
+                                    ⬇️
+                                </button>
+                                <button
+                                    @click.stop="deleteItem(item)"
+                                    class="btn btn-small btn-danger"
+                                    title="Delete">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </main>
+
+        <!-- Create Folder Modal -->
+        <div x-show="showCreateFolderModal" class="modal" x-transition>
+            <div class="modal-content" @click.away="showCreateFolderModal = false">
+                <div class="modal-header">
+                    <h3>Create New Folder</h3>
+                    <button @click="showCreateFolderModal = false" class="close-button">×</button>
+                </div>
+                <div class="modal-body">
+                    <label for="folder-name">Folder Name:</label>
+                    <input 
+                        type="text" 
+                        id="folder-name" 
+                        x-model="newFolderName" 
+                        @keyup.enter="createFolder()"
+                        placeholder="Enter folder name"
+                        class="form-input"
+                    >
+                </div>
+                <div class="modal-footer">
+                    <button @click="showCreateFolderModal = false" class="btn btn-secondary">Cancel</button>
+                    <button @click="createFolder()" class="btn btn-primary" :disabled="!newFolderName.trim()">
+                        Create Folder
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div x-show="showDeleteModal" class="modal" x-transition>
+            <div class="modal-content" @click.away="showDeleteModal = false">
+                <div class="modal-header">
+                    <h3>Confirm Delete</h3>
+                    <button @click="showDeleteModal = false" class="close-button">×</button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete "<span x-text="itemToDelete?.name"></span>"?</p>
+                    <p x-show="itemToDelete?.type === 'folder'" class="warning">
+                        ⚠️ This will delete the folder and all its contents!
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button @click="showDeleteModal = false" class="btn btn-secondary">Cancel</button>
+                    <button @click="confirmDelete()" class="btn btn-danger">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Modal -->
+        <div x-show="showUploadModal" class="modal modal-large" x-transition>
+            <div class="modal-content" @click.away="hideUpload()">
+                <div class="modal-header">
+                    <h3>Upload Files</h3>
+                    <button @click="hideUpload()" class="close-button">×</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Upload Area -->
+                    <div class="upload-drop-zone" :class="{ 'dragging': uploadComponent && uploadComponent.isDragging }">
+                        <div class="upload-area-content">
+                            <div class="upload-icon">📁</div>
+                            <h3>Drop files here to upload</h3>
+                            <p>or</p>
+                            <button @click="uploadComponent && uploadComponent.selectFiles()" class="btn btn-primary">Browse Files</button>
+                            <p class="upload-info">
+                                Maximum file size: <span x-text="uploadComponent && uploadComponent.formatFileSize(uploadComponent.maxFileSize || 0)"></span>
+                                <br>
+                                Maximum files: <span x-text="uploadComponent && uploadComponent.maxFiles"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Upload Queue -->
+                    <div x-show="uploadComponent && uploadComponent.uploads && uploadComponent.uploads.length > 0" class="upload-queue">
+                        <div class="queue-header">
+                            <h4>Upload Queue (<span x-text="uploadComponent && uploadComponent.uploads ? uploadComponent.uploads.length : 0"></span>)</h4>
+                            <div class="queue-actions">
+                                <button @click="uploadComponent && uploadComponent.startUpload()"
+                                        class="btn btn-primary upload-start-btn"
+                                        :disabled="!uploadComponent || uploadComponent.isUploading || (uploadComponent.uploads && uploadComponent.uploads.filter(u => u.status === 'pending').length === 0)">
+                                    ⬆️ Start Upload
+                                </button>
+                                <button @click="uploadComponent && uploadComponent.clearUploads()"
+                                        class="btn btn-secondary"
+                                        :disabled="!uploadComponent || (uploadComponent.uploads && uploadComponent.uploads.some(u => u.status === 'uploading'))">
+                                    🗑️ Clear
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Overall Progress -->
+                        <div x-show="uploadComponent && uploadComponent.uploads && uploadComponent.uploads.some(u => u.status === 'uploading' || u.status === 'completed')"
+                             class="upload-overall-progress">
+                            <div class="progress-info">
+                                <span>Overall Progress</span>
+                                <span x-text="(uploadComponent && uploadComponent.overallProgress || 0).toFixed(1) + '%'"></span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" :style="`width: ${uploadComponent && uploadComponent.overallProgress || 0}%`"></div>
+                            </div>
+                        </div>
+
+                        <!-- Upload List -->
+                        <div class="upload-list">
+                            <template x-for="upload in (uploadComponent && uploadComponent.uploads) || []" :key="upload.id">
+                                <div class="upload-item" :class="`upload-${upload.status}`">
+                                    <div class="upload-file-info">
+                                        <div class="file-icon" x-text="getFileIcon(upload.file)"></div>
+                                        <div class="file-details">
+                                            <div class="file-name" x-text="upload.file.name"></div>
+                                            <div class="file-size" x-text="formatFileSize(upload.file.size)"></div>
+                                        </div>
+                                        <div class="upload-status">
+                                            <span class="status-icon" x-text="getStatusIcon(upload.status)"></span>
+                                            <span class="status-text" x-text="upload.status"></span>
+                                        </div>
+                                        <button @click="uploadComponent && uploadComponent.removeFile(upload.id)"
+                                                class="btn btn-small btn-secondary"
+                                                title="Remove">
+                                            ❌
+                                        </button>
+                                    </div>
+
+                                    <!-- Progress Bar -->
+                                    <div x-show="upload.status === 'uploading'" class="upload-progress">
+                                        <div class="progress-info">
+                                            <span x-text="formatFileSize(upload.bytesUploaded) + ' / ' + formatFileSize(upload.totalBytes)"></span>
+                                            <span x-text="(upload.progress || 0).toFixed(1) + '%'"></span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" :style="`width: ${upload.progress}%`"></div>
+                                        </div>
+                                        <div class="progress-details">
+                                            <span x-text="'Speed: ' + formatSpeed(upload.speed)"></span>
+                                            <span x-text="'Time: ' + formatTime(upload.timeRemaining)"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Error Message -->
+                                    <div x-show="upload.status === 'error'" class="upload-error">
+                                        <span x-text="upload.error"></span>
+                                        <button @click="uploadComponent && uploadComponent.retryUpload(upload.id)" class="btn btn-small btn-primary">
+                                            🔄 Retry
+                                        </button>
+                                    </div>
+
+                                    <!-- Completed Status -->
+                                    <div x-show="upload.status === 'completed'" class="upload-success">
+                                        <span>Upload completed successfully!</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button @click="hideUpload()" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Progress Panel -->
+        <div x-show="showDownloadsPanel" class="download-panel" x-transition>
+            <div class="download-panel-header">
+                <h3>📥 Downloads</h3>
+                <div class="download-panel-controls">
+                    <button @click="downloadComponentInstance && downloadComponentInstance.clearCompleted()" 
+                            x-show="downloadComponentInstance && downloadComponentInstance.completedDownloads && downloadComponentInstance.completedDownloads.length > 0"
+                            class="btn btn-small btn-secondary">
+                        Clear Completed
+                    </button>
+                    <button @click="downloadComponentInstance && downloadComponentInstance.clearFailed()" 
+                            x-show="downloadComponentInstance && downloadComponentInstance.failedDownloads && downloadComponentInstance.failedDownloads.length > 0"
+                            class="btn btn-small btn-secondary">
+                        Clear Failed
+                    </button>
+                    <button @click="toggleDownloadsPanel()" class="btn btn-small btn-secondary">
+                        ✕
+                    </button>
+                </div>
+            </div>
+            
+            <div class="download-panel-content" x-data="downloadComponent" x-init="init()">
+                <!-- Active Downloads -->
+                <div x-show="hasActiveDownloads" class="download-section">
+                    <h4>Active Downloads (<span x-text="activeDownloads.length"></span>)</h4>
+                    <div class="download-list">
+                        <template x-for="download in activeDownloads" :key="download.id">
+                            <div class="download-item" :class="`download-${download.status}`">
+                                <div class="download-info">
+                                    <div class="download-file-info">
+                                        <div class="file-icon" x-text="getFileIcon('file', download.fileName)"></div>
+                                        <div class="file-details">
+                                            <div class="file-name" x-text="download.fileName"></div>
+                                            <div class="file-size" x-text="formatFileSize(download.fileSize)"></div>
+                                        </div>
+                                        <div class="download-status">
+                                            <span class="status-icon" x-text="getStatusIcon(download.status)"></span>
+                                            <span class="status-text" x-text="download.status"></span>
+                                        </div>
+                                        <div class="download-actions">
+                                            <button x-show="download.status === 'downloading'" 
+                                                    @click="pauseDownload(download.id)"
+                                                    class="btn btn-small btn-secondary"
+                                                    title="Pause">
+                                                ⏸️
+                                            </button>
+                                            <button x-show="download.status === 'paused'" 
+                                                    @click="resumeDownload(download.id)"
+                                                    class="btn btn-small btn-primary"
+                                                    title="Resume">
+                                                ▶️
+                                            </button>
+                                            <button @click="cancelDownload(download.id)"
+                                                    class="btn btn-small btn-danger"
+                                                    title="Cancel">
+                                                ❌
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Progress Bar -->
+                                    <div x-show="download.status === 'downloading'" class="download-progress">
+                                        <div class="progress-info">
+                                            <span x-text="formatFileSize(download.bytesDownloaded) + ' / ' + formatFileSize(download.fileSize)"></span>
+                                            <span x-text="(download.progress || 0).toFixed(1) + '%'"></span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" :style="`width: ${download.progress}%`"></div>
+                                        </div>
+                                        <div class="progress-details">
+                                            <span x-text="'Speed: ' + formatSpeed(download.speed)"></span>
+                                            <span x-text="'Time: ' + formatTime(download.timeRemaining)"></span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Paused Status -->
+                                    <div x-show="download.status === 'paused'" class="download-paused">
+                                        <span>Download paused - Click resume to continue</span>
+                                    </div>
+                                    
+                                    <!-- Pending Status -->
+                                    <div x-show="download.status === 'pending'" class="download-pending">
+                                        <span>Waiting to start download...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Completed Downloads -->
+                <div x-show="completedDownloads.length > 0" class="download-section">
+                    <h4>Completed Downloads (<span x-text="completedDownloads.length"></span>)</h4>
+                    <div class="download-list">
+                        <template x-for="download in completedDownloads" :key="download.id">
+                            <div class="download-item download-completed">
+                                <div class="download-file-info">
+                                    <div class="file-icon" x-text="getFileIcon('file', download.fileName)"></div>
+                                    <div class="file-details">
+                                        <div class="file-name" x-text="download.fileName"></div>
+                                        <div class="file-size" x-text="formatFileSize(download.fileSize)"></div>
+                                    </div>
+                                    <div class="download-status">
+                                        <span class="status-icon">✅</span>
+                                        <span class="status-text">completed</span>
+                                    </div>
+                                </div>
+                                <div class="download-success">
+                                    <span>Download completed successfully!</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Failed Downloads -->
+                <div x-show="failedDownloads.length > 0" class="download-section">
+                    <h4>Failed Downloads (<span x-text="failedDownloads.length"></span>)</h4>
+                    <div class="download-list">
+                        <template x-for="download in failedDownloads" :key="download.id">
+                            <div class="download-item download-error">
+                                <div class="download-file-info">
+                                    <div class="file-icon" x-text="getFileIcon('file', download.fileName)"></div>
+                                    <div class="file-details">
+                                        <div class="file-name" x-text="download.fileName"></div>
+                                        <div class="file-size" x-text="formatFileSize(download.fileSize)"></div>
+                                    </div>
+                                    <div class="download-status">
+                                        <span class="status-icon">❌</span>
+                                        <span class="status-text">failed</span>
+                                    </div>
+                                    <button @click="retryDownload(download.id)" class="btn btn-small btn-primary">
+                                        🔄 Retry
+                                    </button>
+                                </div>
+                                <div class="download-error">
+                                    <span x-text="download.error"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Empty State -->
+                <div x-show="!hasActiveDownloads && completedDownloads.length === 0 && failedDownloads.length === 0" class="empty-downloads">
+                    <p>No downloads yet</p>
+                    <p>Click the download button on any file to start downloading</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Progress Dashboard Panel -->
+        <div x-show="showProgressDashboard" class="progress-dashboard-panel" x-transition>
+            <div class="progress-dashboard-header">
+                <h3>📊 Transfer Progress Dashboard</h3>
+                <div class="progress-dashboard-controls">
+                    <button @click="pauseAllTransfers()" class="btn btn-small btn-secondary" title="Pause All">
+                        ⏸️ Pause All
+                    </button>
+                    <button @click="resumeAllTransfers()" class="btn btn-small btn-secondary" title="Resume All">
+                        ▶️ Resume All
+                    </button>
+                    <button @click="cancelAllTransfers()" class="btn btn-small btn-danger" title="Cancel All">
+                        ❌ Cancel All
+                    </button>
+                    <button @click="toggleProgressDashboard()" class="btn btn-small btn-secondary">
+                        ✕
+                    </button>
+                </div>
+            </div>
+            
+            <div class="progress-dashboard-content" x-data="progressDashboard" x-init="init()">
+                <!-- Network Quality Status -->
+                <div class="network-status-section">
+                    <h4>Network Status</h4>
+                    <div class="network-quality-indicator" :class="`network-${networkQuality}`">
+                        <div class="quality-icon">
+                            <span x-show="networkQuality === 'EXCELLENT'">🟢</span>
+                            <span x-show="networkQuality === 'GOOD'">🔵</span>
+                            <span x-show="networkQuality === 'FAIR'">🟡</span>
+                            <span x-show="networkQuality === 'POOR'">🟠</span>
+                            <span x-show="networkQuality === 'UNKNOWN'">⚪</span>
+                        </div>
+                        <div class="quality-info">
+                            <span class="quality-label" x-text="networkQuality"></span>
+                            <span class="bandwidth-usage" x-text="'Bandwidth: ' + formatSpeed(totalBandwidthUsage)"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Transfer Statistics -->
+                <div class="transfer-stats-section">
+                    <h4>Transfer Statistics</h4>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Active Transfers</div>
+                            <div class="stat-value" x-text="activeTransfers.length"></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Completed Today</div>
+                            <div class="stat-value" x-text="completedTodayCount"></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Transferred</div>
+                            <div class="stat-value" x-text="formatFileSize(totalBytesTransferred)"></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Average Speed</div>
+                            <div class="stat-value" x-text="formatSpeed(averageSpeed)"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Active Transfers -->
+                <div x-show="activeTransfers.length > 0" class="active-transfers-section">
+                    <h4>Active Transfers (<span x-text="activeTransfers.length"></span>)</h4>
+                    <div class="transfers-list">
+                        <template x-for="transfer in activeTransfers" :key="transfer.id">
+                            <div class="transfer-item" :class="`transfer-${transfer.type} transfer-priority-${transfer.priority}`">
+                                <div class="transfer-info">
+                                    <div class="transfer-type-icon">
+                                        <span x-show="transfer.type === 'upload'">⬆️</span>
+                                        <span x-show="transfer.type === 'download'">⬇️</span>
+                                    </div>
+                                    <div class="transfer-details">
+                                        <div class="transfer-name" x-text="transfer.fileName"></div>
+                                        <div class="transfer-progress">
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" :style="`width: ${transfer.percentage}%`"></div>
+                                            </div>
+                                            <div class="progress-text">
+                                                <span x-text="formatFileSize(transfer.transferredBytes || 0) + ' / ' + formatFileSize(transfer.totalBytes || 0)"></span>
+                                                <span x-text="(transfer.percentage || 0).toFixed(1) + '%'"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="transfer-priority">
+                                        <select @change="setTransferPriority(transfer.id, $event.target.value)" class="priority-select">
+                                            <option value="LOW" :selected="transfer.priority === 'LOW'">Low</option>
+                                            <option value="NORMAL" :selected="transfer.priority === 'NORMAL'">Normal</option>
+                                            <option value="HIGH" :selected="transfer.priority === 'HIGH'">High</option>
+                                        </select>
+                                    </div>
+                                    <div class="transfer-speed">
+                                        <span x-text="formatSpeed(transfer.currentSpeed)"></span>
+                                    </div>
+                                    <div class="transfer-actions">
+                                        <button x-show="transfer.status === 'active'"
+                                                @click="pauseTransfer(transfer.id)"
+                                                class="btn btn-small btn-secondary"
+                                                title="Pause">
+                                            ⏸️
+                                        </button>
+                                        <button x-show="transfer.status === 'paused'"
+                                                @click="resumeTransfer(transfer.id)"
+                                                class="btn btn-small btn-primary"
+                                                title="Resume">
+                                            ▶️
+                                        </button>
+                                        <button @click="cancelTransfer(transfer.id)"
+                                                class="btn btn-small btn-danger"
+                                                title="Cancel">
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Transfer History -->
+                <div x-show="recentTransfers.length > 0" class="transfer-history-section">
+                    <h4>Recent Transfers (<span x-text="recentTransfers.length"></span>)</h4>
+                    <div class="history-list">
+                        <template x-for="transfer in recentTransfers" :key="transfer.id">
+                            <div class="history-item" :class="`transfer-${transfer.type} transfer-${transfer.status}`">
+                                <div class="history-info">
+                                    <div class="history-type-icon">
+                                        <span x-show="transfer.type === 'upload'">⬆️</span>
+                                        <span x-show="transfer.type === 'download'">⬇️</span>
+                                    </div>
+                                    <div class="history-details">
+                                        <div class="history-name" x-text="transfer.fileName"></div>
+                                        <div class="history-meta">
+                                            <span x-text="formatFileSize(transfer.totalBytes)"></span>
+                                            <span x-show="transfer.status === 'completed'" class="history-success">✅ Completed</span>
+                                            <span x-show="transfer.status === 'error'" class="history-error">❌ Failed</span>
+                                            <span x-show="transfer.status === 'cancelled'" class="history-cancelled">⏹️ Cancelled</span>
+                                        </div>
+                                    </div>
+                                    <div class="history-time" x-text="formatDate(transfer.startTime)"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Empty State -->
+                <div x-show="activeTransfers.length === 0 && recentTransfers.length === 0" class="empty-progress-dashboard">
+                    <p>No transfer activity</p>
+                    <p>Upload or download files to see progress tracking</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Image Preview Modal -->
+        <div x-show="showImagePreview"
+             class="image-preview-modal"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @keydown.escape="imagePreviewInstance && imagePreviewInstance.closePreview()"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="image-preview-title"
+             aria-describedby="image-preview-description">
+            
+            <div class="image-preview-overlay" @click="imagePreviewInstance && imagePreviewInstance.closePreview()"></div>
+            
+            <div class="image-preview-container" @click.stop>
+                <!-- Preview Header with Controls -->
+                <div class="image-preview-header">
+                    <div class="image-preview-info">
+                        <h3 id="image-preview-title" class="image-title" x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''"></h3>
+                        <div class="image-meta">
+                            <span class="image-size" x-text="formatFileSize(imagePreviewInstance && imagePreviewInstance.currentImage?.size || 0)"></span>
+                            <span class="image-dimensions" x-show="imagePreviewInstance && imagePreviewInstance.imageDimensions" x-text="imagePreviewInstance && imagePreviewInstance.imageDimensions"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="image-preview-controls">
+                        <!-- Zoom Controls -->
+                        <div class="control-group zoom-controls">
+                            <button @click="imagePreviewInstance.zoomIn()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Zoom In"
+                                    :disabled="imagePreviewInstance && imagePreviewInstance.zoomLevel >= imagePreviewInstance.maxZoom"
+                                    aria-label="Zoom in">
+                                🔍+
+                            </button>
+                            <button @click="imagePreviewInstance.zoomOut()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Zoom Out"
+                                    :disabled="imagePreviewInstance && imagePreviewInstance.zoomLevel <= imagePreviewInstance.minZoom"
+                                    aria-label="Zoom out">
+                                🔍-
+                            </button>
+                            <button @click="imagePreviewInstance.resetZoom()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Reset Zoom"
+                                    aria-label="Reset zoom">
+                                🔄
+                            </button>
+                            <button @click="imagePreviewInstance.fitToScreen()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Fit to Screen"
+                                    aria-label="Fit to screen">
+                                📐
+                            </button>
+                            <span class="zoom-indicator" x-text="imagePreviewInstance && Math.round(imagePreviewInstance.zoomLevel * 100) + '%'"></span>
+                        </div>
+                        
+                        <!-- Rotation Controls -->
+                        <div class="control-group rotation-controls">
+                            <button @click="imagePreviewInstance.rotateLeft()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Rotate Left"
+                                    aria-label="Rotate left">
+                                ↺
+                            </button>
+                            <button @click="imagePreviewInstance.rotateRight()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Rotate Right"
+                                    aria-label="Rotate right">
+                                ↻
+                            </button>
+                        </div>
+                        
+                        <!-- File Actions -->
+                        <div class="control-group file-controls">
+                            <button @click="imagePreviewInstance.downloadImage()"
+                                    class="btn btn-primary btn-small"
+                                    title="Download Image"
+                                    aria-label="Download image">
+                                ⬇️
+                            </button>
+                            <button @click="imagePreviewInstance.openInNewTab()"
+                                    class="btn btn-secondary btn-small"
+                                    title="Open in New Tab"
+                                    aria-label="Open in new tab">
+                                🔗
+                            </button>
+                        </div>
+                        
+                        <!-- Close Button -->
+                        <button @click="imagePreviewInstance.closePreview()"
+                                class="btn btn-danger btn-small close-preview-btn"
+                                title="Close Preview"
+                                aria-label="Close image preview">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Image Viewport -->
+                <div class="image-viewport"
+                     @wheel.prevent="imagePreviewInstance && imagePreviewInstance.handleWheel($event)"
+                     @mousedown="imagePreviewInstance && imagePreviewInstance.startDrag($event)"
+                     @mousemove="imagePreviewInstance && imagePreviewInstance.drag($event)"
+                     @mouseup="imagePreviewInstance && imagePreviewInstance.endDrag()"
+                     @mouseleave="imagePreviewInstance && imagePreviewInstance.endDrag()"
+                     @touchstart="imagePreviewInstance && imagePreviewInstance.startTouch($event)"
+                     @touchmove="imagePreviewInstance && imagePreviewInstance.handleTouch($event)"
+                     @touchend="imagePreviewInstance && imagePreviewInstance.endTouch()"
+                     tabindex="0"
+                     role="region"
+                     aria-label="Image viewer">
+                    
+                    <!-- Loading State -->
+                    <div x-show="imagePreviewInstance && imagePreviewInstance.isLoading" class="image-loading">
+                        <div class="loading-spinner"></div>
+                        <p>Loading image...</p>
+                    </div>
+                    
+                    <!-- Error State -->
+                    <div x-show="imagePreviewInstance && imagePreviewInstance.hasError && !imagePreviewInstance.isClosing" class="image-error">
+                        <div class="error-icon">❌</div>
+                        <h4>Failed to load image</h4>
+                        <p x-text="imagePreviewInstance && imagePreviewInstance.errorMessage"></p>
+                        <button @click="imagePreviewInstance && imagePreviewInstance.retryLoad()" class="btn btn-primary btn-small">
+                            🔄 Retry
+                        </button>
+                    </div>
+                    
+                    <!-- Main Image Element -->
+                    <div x-show="imagePreviewInstance && !imagePreviewInstance.isLoading && !imagePreviewInstance.hasError && imagePreviewInstance.currentImage?.url" class="image-wrapper"
+                         :style="imagePreviewInstance && imagePreviewInstance.getImageTransformStyle()">
+                        <img x-ref="imageElement"
+                             x-show="imagePreviewInstance && imagePreviewInstance.currentImage?.url"
+                             :src="imagePreviewInstance && imagePreviewInstance.currentImage?.url || ''"
+                             :alt="imagePreviewInstance && imagePreviewInstance.currentImage?.name || 'Image preview'"
+                             @load="imagePreviewInstance && !imagePreviewInstance.isClosing && imagePreviewInstance.onImageLoad()"
+                             @error="imagePreviewInstance && !imagePreviewInstance.isClosing && imagePreviewInstance.onImageError($event)"
+                             draggable="false"
+                             class="preview-image"
+                             :data-image-path="imagePreviewInstance && imagePreviewInstance.currentImage?.path || ''"
+                             :data-image-name="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''">
+                    </div>
+                    
+                    <!-- Navigation Controls for Multiple Images -->
+                    <template x-if="imagePreviewInstance && imagePreviewInstance.hasMultipleImages">
+                        <div class="image-navigation">
+                            <button @click="imagePreviewInstance && imagePreviewInstance.previousImage()"
+                                    class="nav-btn nav-prev"
+                                    :disabled="!(imagePreviewInstance && imagePreviewInstance.hasPreviousImage)"
+                                    title="Previous Image"
+                                    aria-label="Previous image">
+                                ‹
+                            </button>
+                            <div class="image-counter">
+                                <span x-text="imagePreviewInstance && `${imagePreviewInstance.currentIndex + 1} / ${imagePreviewInstance.totalImages}`"></span>
+                            </div>
+                            <button @click="imagePreviewInstance && imagePreviewInstance.nextImage()"
+                                    class="nav-btn nav-next"
+                                    :disabled="!(imagePreviewInstance && imagePreviewInstance.hasNextImage)"
+                                    title="Next Image"
+                                    aria-label="Next image">
+                                ›
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- Image Information Panel -->
+                <div class="image-info-panel" x-show="imagePreviewInstance && imagePreviewInstance.showInfoPanel" x-transition>
+                    <div class="info-panel-content">
+                        <h4>Image Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Name:</label>
+                                <span x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>Size:</label>
+                                <span x-text="formatFileSize(imagePreviewInstance && imagePreviewInstance.currentImage?.size || 0)"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>Dimensions:</label>
+                                <span x-text="imagePreviewInstance && imagePreviewInstance.imageDimensions || 'Unknown'"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>Type:</label>
+                                <span x-text="imagePreviewInstance && imagePreviewInstance.getFileType(imagePreviewInstance.currentImage?.name)"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>Path:</label>
+                                <span x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.path || ''" class="path-text"></span>
+                            </div>
+                            <div class="info-item">
+                                <label>Modified:</label>
+                                <span x-text="formatDate(imagePreviewInstance && imagePreviewInstance.currentImage?.modified)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Toolbar for Additional Controls -->
+                <div class="image-preview-toolbar">
+                    <div class="toolbar-left">
+                        <button @click="imagePreviewInstance && imagePreviewInstance.toggleInfoPanel()"
+                                class="btn btn-secondary btn-small"
+                                :class="{ 'btn-active': imagePreviewInstance && imagePreviewInstance.showInfoPanel }"
+                                title="Toggle Information Panel"
+                                aria-label="Toggle information panel">
+                            ℹ️ Info
+                        </button>
+                        <button @click="imagePreviewInstance && imagePreviewInstance.toggleFullscreen()"
+                                class="btn btn-secondary btn-small"
+                                title="Toggle Fullscreen"
+                                aria-label="Toggle fullscreen">
+                            ⛶ Fullscreen
+                        </button>
+                    </div>
+                    
+                    <div class="toolbar-right">
+                        <!-- Touch Gesture Indicators for Mobile -->
+                        <div class="gesture-indicators" x-show="imagePreviewInstance && imagePreviewInstance.isTouchDevice">
+                            <span class="gesture-hint">Pinch to zoom • Drag to pan</span>
+                        </div>
+                        
+                        <!-- Keyboard Shortcuts Help -->
+                        <button @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = !imagePreviewInstance.showKeyboardHelp)"
+                                class="btn btn-secondary btn-small"
+                                title="Keyboard Shortcuts"
+                                aria-label="Show keyboard shortcuts">
+                            ⌨️ Shortcuts
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Keyboard Shortcuts Help Modal -->
+                <div x-show="imagePreviewInstance && imagePreviewInstance.showKeyboardHelp"
+                     class="keyboard-help-overlay"
+                     x-transition
+                     @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = false)">
+                    <div class="keyboard-help-content" @click.stop>
+                        <h4>Keyboard Shortcuts</h4>
+                        <div class="shortcuts-grid">
+                            <div class="shortcut-item">
+                                <kbd>Escape</kbd>
+                                <span>Close preview</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>+</kbd> / <kbd>=</kbd>
+                                <span>Zoom in</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>-</kbd>
+                                <span>Zoom out</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>0</kbd>
+                                <span>Reset zoom</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>F</kbd>
+                                <span>Fit to screen</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>L</kbd>
+                                <span>Rotate left</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>R</kbd>
+                                <span>Rotate right</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>←</kbd> / <kbd>→</kbd>
+                                <span>Navigate images</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>D</kbd>
+                                <span>Download image</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>I</kbd>
+                                <span>Toggle info panel</span>
+                            </div>
+                            <div class="shortcut-item">
+                                <kbd>F11</kbd>
+                                <span>Toggle fullscreen</span>
+                            </div>
+                        </div>
+                        <button @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = false)" class="btn btn-primary">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Modules - Load first -->
+    <script src="/js/modules/api.js"></script>
+    <script src="/js/modules/file-utils.js"></script>
+    <script src="/js/modules/notifications.js"></script>
+    
+    <!-- Include Progress Tracker -->
+    <script src="/js/utils/progress-tracker.js"></script>
+    <!-- Include Upload Helper -->
+    <script src="/js/utils/upload-helper.js"></script>
+    <!-- Include Download Helper -->
+    <script src="/js/utils/download-helper.js"></script>
+    <!-- Include Upload Component -->
+    <script src="/js/components/upload.js"></script>
+    <!-- Include Download Progress Component -->
+    <script src="/js/components/download-progress.js"></script>
+    <!-- Include Progress Dashboard -->
+    <script src="/js/components/progress-dashboard.js"></script>
+    <!-- Include Image Preview Component -->
+    <script src="/js/components/image-preview.js"></script>
+    <!-- Main App -->
+    <script src="/js/app.js"></script>
+</body>
+</html>
