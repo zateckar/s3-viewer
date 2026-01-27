@@ -1,5 +1,6 @@
-import { config } from './utils/config';
+import { configManager } from './services/config-manager';
 import { handleFilesRequest } from './routes/files';
+import { handleConfigRequest } from './routes/config';
 import { handleBucketsRequest } from './routes/buckets';
 import { handleAuthRequest } from './routes/auth';
 import { addCorsHeaders } from './middleware/cors';
@@ -9,8 +10,11 @@ import { authenticate, unauthorizedResponse } from './middleware/auth';
 /**
  * Main server instance
  */
+// Initialize configuration
+const config = await configManager.loadConfig();
+
 const server = Bun.serve({
-  port: config.port,
+  port: config.app.port,
   async fetch(request: Request) {
     const url = new URL(request.url);
     const path = url.pathname.split('/').filter(Boolean); // Split path and remove empty segments
@@ -50,6 +54,12 @@ const server = Bun.serve({
           
           if (apiPath.length > 0 && apiPath[0] === 'buckets') {
             const response = await handleBucketsRequest(request);
+            return addCorsHeaders(response, request);
+          }
+
+          if (apiPath.length > 0 && apiPath[0] === 'config') {
+            const configPath = apiPath.slice(1);
+            const response = await handleConfigRequest(request, configPath);
             return addCorsHeaders(response, request);
           }
         }
@@ -115,10 +125,10 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 S3 Viewer server is running on http://localhost:${config.port}`);
-console.log(`📊 Server environment: ${config.nodeEnv}`);
+console.log(`🚀 S3 Viewer server is running on http://localhost:${config.app.port}`);
+console.log(`📊 Server environment: ${config.app.nodeEnv}`);
 console.log(`🗄️  S3 endpoint: ${config.s3.endpoint}`);
-console.log(`📦 S3 bucket: ${config.s3.bucketName}`);
+console.log(`📦 S3 buckets: ${config.s3.bucketNames.join(', ')}`);
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {

@@ -37,12 +37,14 @@ window.fileBrowserApp = {
     downloadComponentInstance: null,
     progressDashboardInstance: null,
     imagePreviewInstance: null,
+    settingsModalInstance: null,
     
     // Panel states
     showDownloadsPanel: false,
     downloadCount: 0,
     showProgressDashboard: false,
     showImagePreview: false,
+    showSettingsModal: false,
     
     // Auth state
     isAuthenticated: false,
@@ -204,6 +206,22 @@ window.fileBrowserApp = {
         
         // Initialize image preview component
         this.initializeImagePreview();
+
+        // Initialize settings modal component
+        if (window.SettingsModal) {
+            console.log('App: Initializing SettingsModal component');
+            this.settingsModalInstance = window.SettingsModal();
+            // Bind Alpine utilities to the component instance if needed
+            if (this.$nextTick) {
+                this.settingsModalInstance.$nextTick = (fn) => this.$nextTick(fn);
+            }
+            if (this.$dispatch) {
+                this.settingsModalInstance.$dispatch = (event, detail) => this.$dispatch(event, detail);
+            }
+            // Set up event listener for opening settings
+            this.settingsModalInstance.init();
+            console.log('App: SettingsModal initialized, show:', this.settingsModalInstance.show);
+        }
         
         // Load initial files
         await this.loadFiles();
@@ -607,6 +625,11 @@ window.fileBrowserApp = {
         if (this.showProgressDashboard && this.progressDashboardInstance) {
             this.progressDashboardInstance.init();
         }
+    },
+
+    openSettings() {
+        console.log('App: Dispatching open-settings event');
+        window.dispatchEvent(new CustomEvent('open-settings'));
     },
     
     updateTransferStats() {

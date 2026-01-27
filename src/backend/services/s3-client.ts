@@ -1,8 +1,9 @@
 import { S3Client } from 'bun';
-import { config } from '../utils/config';
+import { configManager } from './config-manager';
 import { validateS3Path } from '../utils/path-validator';
 import type { DownloadProgress, DownloadOptions, DownloadResponse } from '../../shared/types';
 import { STORAGE_CONSTANTS, FILE_CONSTANTS, TIMEOUT_CONSTANTS } from '../../shared/constants';
+import { LocalS3Client } from './local-s3-adapter';
 
 /**
  * S3 Client Pool - Singleton pattern to avoid creating new connections per request
@@ -10,8 +11,9 @@ import { STORAGE_CONSTANTS, FILE_CONSTANTS, TIMEOUT_CONSTANTS } from '../../shar
  */
 class S3ClientPool {
   private static instance: S3ClientPool;
-  private clients: Map<string, S3Client> = new Map();
+  private clients: Map<string, S3Client | LocalS3Client> = new Map();
   private readonly maxClients: number = 10;
+  private localStoragePath: string = '/data/storage';
 
   private constructor() {}
 
@@ -22,7 +24,7 @@ class S3ClientPool {
     return S3ClientPool.instance;
   }
 
-  public getClient(bucket: string): S3Client {
+  public getClient(bucket: string, s3Config?: any): S3Client | LocalS3Client {
     // Return existing client if available
     if (this.clients.has(bucket)) {
       return this.clients.get(bucket)!;
@@ -37,16 +39,28 @@ class S3ClientPool {
       }
     }
 
+    // Check if this is a local storage bucket (no S3 endpoint configured or bucket starts with 'local-')
+    if (!s3Config?.endpoint || bucket.startsWith('local-')) {
+      const localBucketName = bucket.replace(/^local-/, '');
+      const client = new LocalS3Client(this.localStoragePath, localBucketName);
+      this.clients.set(bucket, client);
+      return client;
+    }
+
     const client = new S3Client({
-      endpoint: config.s3.endpoint,
-      region: config.s3.region,
-      accessKeyId: config.s3.accessKeyId,
-      secretAccessKey: config.s3.secretAccessKey,
+      endpoint: s3Config?.endpoint || 'http://localhost:9000',
+      region: s3Config?.region || 'us-east-1',
+      accessKeyId: s3Config?.accessKeyId || 'minioadmin',
+      secretAccessKey: s3Config?.secretAccessKey || 'minioadmin',
       bucket: bucket,
     });
 
     this.clients.set(bucket, client);
     return client;
+  }
+
+  public setLocalStoragePath(path: string): void {
+    this.localStoragePath = path;
   }
 
   public clearPool(): void {
@@ -172,14 +186,23 @@ const bucketValidationCache = new CacheLayer<boolean>(10, 300000); // 5 minute T
 export class S3Service {
   private currentBucket: string;
   private clientPool: S3ClientPool;
+  private config: any = null;
 
-  constructor() {
-    this.currentBucket = config.s3.bucketNames[0];
+  constructor(config?: any) {
+    this.config = config;
     this.clientPool = S3ClientPool.getInstance();
+    this.currentBucket = this.config?.s3?.bucketNames?.[0] || 'default-bucket';
+  }
+
+  private async getConfig() {
+    if (!this.config) {
+      this.config = await configManager.getConfig();
+    }
+    return this.config;
   }
 
   getAvailableBuckets(): string[] {
-    return config.s3.bucketNames;
+    return this.config?.s3?.bucketNames || [];
   }
 
   getCurrentBucket(): string {
@@ -187,7 +210,8 @@ export class S3Service {
   }
 
   setCurrentBucket(bucket: string): void {
-    if (config.s3.bucketNames.includes(bucket)) {
+    const availableBuckets = this.getAvailableBuckets();
+    if (availableBuckets.includes(bucket)) {
       this.currentBucket = bucket;
     } else {
       throw new Error(`Bucket "${bucket}" is not configured`);
@@ -197,9 +221,11 @@ export class S3Service {
   /**
    * Get S3 client from pool (singleton pattern per bucket)
    */
-  private getS3Client(bucket?: string): S3Client {
+  private async getS3Client(bucket?: string): Promise<S3Client> {
     const targetBucket = bucket || this.currentBucket;
-    return this.clientPool.getClient(targetBucket);
+    const config = await this.getConfig();
+    
+    return this.clientPool.getClient(targetBucket, config.s3);
   }
 
   /**
@@ -243,7 +269,7 @@ export class S3Service {
     }
 
     try {
-      const client = this.getS3Client(bucketName);
+      const client = await this.getS3Client(bucketName);
       // Try to list the bucket with minimal items to check accessibility
       await client.list({
         prefix: '',
@@ -261,6 +287,7 @@ export class S3Service {
 
   async validateAllBuckets(): Promise<BucketInfo[]> {
     const bucketInfos: BucketInfo[] = [];
+    const config = await this.getConfig();
     
     for (let i = 0; i < config.s3.bucketNames.length; i++) {
       const bucketName = config.s3.bucketNames[i];
@@ -300,7 +327,7 @@ export class S3Service {
     }
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       const response = await client.list({
         prefix: prefix,
         delimiter: '/',
@@ -422,7 +449,7 @@ export class S3Service {
     const key = path.startsWith('/') ? path.substring(1) : path;
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       const url = await client.presign(key, { expiresIn }); // Custom expiration time
       return url;
     } catch (error) {

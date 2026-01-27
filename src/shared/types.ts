@@ -72,3 +72,66 @@ export interface S3DownloadOptions {
   onProgress?: (progress: DownloadProgress) => void;
   chunkSize?: number;
 }
+
+// Configuration interfaces
+export interface S3Config {
+  endpoint: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucketNames: string[];
+  region: string;
+}
+
+export interface LocalStorageConfig {
+  enabled: boolean;
+  basePath: string;
+}
+
+export interface LocalAuthConfig {
+  enabled: boolean;
+  user: string;
+  pass: string;
+}
+
+export interface OIDCAuthConfig {
+  enabled: boolean;
+  issuer?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+  scope: string;
+}
+
+export interface AuthConfig {
+  local: LocalAuthConfig;
+  oidc: OIDCAuthConfig;
+}
+
+export interface SecurityConfig {
+  jwtSecret: string;
+  allowedOrigins: string[];
+}
+
+export interface AppConfig {
+  port: number;
+  nodeEnv: string;
+}
+
+export interface S3ViewerConfig {
+  app: AppConfig;
+  s3: S3Config;
+  localStorage: LocalStorageConfig;
+  auth: AuthConfig;
+  security: SecurityConfig;
+}
+
+export interface ConfigTestRequest {
+  type: 's3' | 'oidc';
+  config?: Partial<S3Config | OIDCAuthConfig>;
+}
+
+export interface ConfigTestResult {
+  success: boolean;
+  message: string;
+  details?: any;
+}

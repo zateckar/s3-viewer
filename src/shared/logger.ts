@@ -252,3 +252,6 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { Logger, LogLevel };
 }
+
+// Export singleton instance
+export const logger = Logger;

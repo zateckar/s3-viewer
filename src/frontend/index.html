@@ -69,15 +69,10 @@
                     <div class="logo">
                         <h1>S3 File Browser</h1>
                     </div>
-                    <div class="user-info">
-                        <!-- User Profile -->
-                        <div class="user-profile" x-show="isAuthenticated">
-                            <span class="user-name" x-text="user?.username || 'User'"></span>
-                            <button @click="logout" class="btn btn-small btn-secondary">Logout</button>
-                        </div>
-
-                        <div class="bucket-selector">
-                            <label for="bucket-select">S3 Bucket:</label>
+                    
+                    <div class="header-right">
+                        <div class="bucket-selector" x-show="isAuthenticated">
+                            <label for="bucket-select">Bucket:</label>
                             <div class="bucket-select-wrapper">
                                 <select
                                     id="bucket-select"
@@ -101,8 +96,22 @@
                                     <span x-text="getBucketStatus(currentBucket).icon"></span>
                                 </div>
                             </div>
-                            <div class="bucket-status-text" x-show="getBucketStatus(currentBucket).text">
-                                <span x-text="getBucketStatus(currentBucket).text"></span>
+                        </div>
+
+                        <!-- User Dropdown -->
+                        <div class="dropdown" x-show="isAuthenticated" x-data="{ open: false }" @click.away="open = false">
+                            <button @click="open = !open" class="btn btn-secondary dropdown-toggle">
+                                <span class="user-name" x-text="user?.username || 'Admin'"></span>
+                                <span class="dropdown-caret">▼</span>
+                            </button>
+                            <div x-show="open" class="dropdown-menu" x-transition x-cloak>
+                                <button @click="openSettings(); open = false" class="dropdown-item">
+                                    <span>⚙️ Settings</span>
+                                </button>
+                                <div class="dropdown-divider"></div>
+                                <button @click="logout" class="dropdown-item dropdown-item-danger">
+                                    <span>🚪 Logout</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -975,6 +984,209 @@
                 </div>
             </div>
         </div>
+
+        <!-- Settings Modal -->
+        <template x-if="settingsModalInstance">
+            <div x-show="settingsModalInstance.show" class="modal modal-large" x-transition>
+                <div class="modal-content" @click.away="settingsModalInstance.close()">
+                    <div class="modal-header">
+                        <h3>⚙️ Application Settings</h3>
+                        <div class="header-actions">
+                            <span x-show="settingsModalInstance.hasFileConfig" class="badge badge-success">File Persistent</span>
+                            <span x-show="!settingsModalInstance.hasFileConfig" class="badge badge-warning">Environment Only</span>
+                            <button @click.stop="settingsModalInstance.close()" class="close-button" type="button">×</button>
+                        </div>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Loading State -->
+                        <div x-show="settingsModalInstance.loading" class="loading">
+                            <p>Loading configuration...</p>
+                        </div>
+
+                        <!-- Settings Content -->
+                        <template x-if="settingsModalInstance.config && !settingsModalInstance.loading">
+                        <div>
+                            <div class="settings-tabs">
+                                <button @click="settingsModalInstance.activeTab = 's3'" :class="{ 'active': settingsModalInstance.activeTab === 's3' }" class="tab-btn">S3 Storage</button>
+                                <button @click="settingsModalInstance.activeTab = 'localStorage'" :class="{ 'active': settingsModalInstance.activeTab === 'localStorage' }" class="tab-btn">Local Storage</button>
+                                <button @click="settingsModalInstance.activeTab = 'auth'" :class="{ 'active': settingsModalInstance.activeTab === 'auth' }" class="tab-btn">Authentication</button>
+                                <button @click="settingsModalInstance.activeTab = 'security'" :class="{ 'active': settingsModalInstance.activeTab === 'security' }" class="tab-btn">Security</button>
+                            </div>
+
+                            <div class="tab-content">
+                        <!-- S3 Settings -->
+                        <div x-show="settingsModalInstance.activeTab === 's3'">
+                            <div class="settings-group">
+                                <h4>S3 Connection</h4>
+                                <div class="form-group">
+                                    <label>Endpoint URL</label>
+                                    <input type="text" x-model="settingsModalInstance.config.s3.endpoint" placeholder="http://localhost:9000" class="form-input">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Access Key ID</label>
+                                        <input type="text" x-model="settingsModalInstance.config.s3.accessKeyId" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Secret Access Key</label>
+                                        <input type="password" x-model="settingsModalInstance.config.s3.secretAccessKey" class="form-input">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Region</label>
+                                        <input type="text" x-model="settingsModalInstance.config.s3.region" placeholder="us-east-1" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Bucket Names (comma-separated)</label>
+                                        <input type="text" x-model="settingsModalInstance.config.s3.bucketNamesString" placeholder="bucket1, bucket2" class="form-input">
+                                    </div>
+                                </div>
+                                <button @click="settingsModalInstance.testS3()" class="btn btn-secondary" :disabled="settingsModalInstance.testing">
+                                    <span x-show="!settingsModalInstance.testing">Test S3 Connection</span>
+                                    <span x-show="settingsModalInstance.testing">Testing...</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Local Storage Settings -->
+                        <div x-show="settingsModalInstance.activeTab === 'localStorage'">
+                            <div class="settings-group">
+                                <h4>Local File Storage</h4>
+                                <p class="settings-description">Use local filesystem instead of S3 for file storage. Useful for development or when S3 is not available.</p>
+                                <div class="form-row">
+                                    <div class="form-group checkbox-group">
+                                        <label><input type="checkbox" x-model="settingsModalInstance.config.localStorage.enabled"> Enable Local Storage</label>
+                                        <small x-show="settingsModalInstance.config.localStorage.enabled" class="form-hint">📁 Files will be stored in the local filesystem</small>
+                                    </div>
+                                </div>
+                                <div class="form-row" x-show="settingsModalInstance.config.localStorage.enabled">
+                                    <div class="form-group">
+                                        <label>Storage Base Path</label>
+                                        <input type="text" x-model="settingsModalInstance.config.localStorage.basePath" placeholder="/data/storage" class="form-input">
+                                        <small>
+                                            Path where files will be stored.
+                                            <br>Examples:
+                                            <br>• <code>Linux/Mac</code>: /data/storage, /var/lib/s3-viewer
+                                            <br>• <code>Windows</code>: C:/storage, C:\data\s3-viewer, D:/files
+                                            <br>• <code>Container</code>: /data/storage (with volume mount)
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="info-box" x-show="settingsModalInstance.config.localStorage.enabled">
+                                    <strong>💡 Info:</strong>
+                                    <ul>
+                                        <li>Local storage works alongside S3 configuration</li>
+                                        <li>Leave S3 endpoint empty to use only local storage</li>
+                                        <li>Each bucket is stored in a subdirectory</li>
+                                        <li>Perfect for containerized deployments with volume mounts</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Auth Settings -->
+                        <div x-show="settingsModalInstance.activeTab === 'auth'">
+                            <div class="settings-group">
+                                <h4>Local Authentication</h4>
+                                <div class="form-row">
+                                    <div class="form-group checkbox-group">
+                                        <label><input type="checkbox" x-model="settingsModalInstance.config.auth.local.enabled"> Enable Local Auth</label>
+                                    </div>
+                                </div>
+                                <div class="form-row" x-show="settingsModalInstance.config.auth.local.enabled">
+                                    <div class="form-group">
+                                        <label>Admin Username</label>
+                                        <input type="text" x-model="settingsModalInstance.config.auth.local.user" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Admin Password</label>
+                                        <input type="password" x-model="settingsModalInstance.config.auth.local.pass" class="form-input">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-group">
+                                <h4>OIDC / Keycloak Authentication</h4>
+                                <div class="form-row">
+                                    <div class="form-group checkbox-group">
+                                        <label><input type="checkbox" x-model="settingsModalInstance.config.auth.oidc.enabled"> Enable OIDC</label>
+                                    </div>
+                                </div>
+                                <div x-show="settingsModalInstance.config.auth.oidc.enabled">
+                                    <div class="form-group">
+                                        <label>Issuer URL</label>
+                                        <input type="text" x-model="settingsModalInstance.config.auth.oidc.issuer" placeholder="https://keycloak.example.com/realms/myrealm" class="form-input">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Client ID</label>
+                                            <input type="text" x-model="settingsModalInstance.config.auth.oidc.clientId" class="form-input">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Client Secret</label>
+                                            <input type="password" x-model="settingsModalInstance.config.auth.oidc.clientSecret" class="form-input">
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Redirect URI</label>
+                                        <input type="text" x-model="settingsModalInstance.config.auth.oidc.redirectUri" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Scope</label>
+                                        <input type="text" x-model="settingsModalInstance.config.auth.oidc.scope" placeholder="openid profile email" class="form-input">
+                                    </div>
+                                    <button @click="settingsModalInstance.testOIDC()" class="btn btn-secondary" :disabled="settingsModalInstance.testing">
+                                        <span x-show="!settingsModalInstance.testing">Test OIDC Connection</span>
+                                        <span x-show="settingsModalInstance.testing">Testing...</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Security Settings -->
+                        <div x-show="settingsModalInstance.activeTab === 'security'">
+                            <div class="settings-group">
+                                <h4>Security Configuration</h4>
+                                <div class="form-group">
+                                    <label>JWT Secret (Session signing)</label>
+                                    <input type="password" x-model="settingsModalInstance.config.security.jwtSecret" class="form-input">
+                                    <small>Changing this will invalidate all current sessions.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label>Allowed Origins (CORS)</label>
+                                    <input type="text" :value="settingsModalInstance.config.security.allowedOrigins.join(', ')" @input="settingsModalInstance.config.security.allowedOrigins = $event.target.value.split(',').map(s => s.trim()).filter(Boolean)" class="form-input">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Test Results -->
+                        <div x-show="settingsModalInstance.testResult" class="test-result-box" :class="settingsModalInstance.testResult?.success ? 'success' : 'error'">
+                            <div class="test-result-header">
+                                <strong x-text="settingsModalInstance.testResult?.success ? '✅ Test Successful' : '❌ Test Failed'"></strong>
+                            </div>
+                            <div class="test-result-body">
+                                <p x-text="settingsModalInstance.testResult?.message"></p>
+                                <pre x-show="settingsModalInstance.testResult?.details" x-text="JSON.stringify(settingsModalInstance.testResult?.details, null, 2)"></pre>
+                            </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="modal-footer">
+                        <div class="footer-left">
+                            <button @click="settingsModalInstance.resetConfig()" class="btn btn-danger">Reset to Defaults</button>
+                        </div>
+                        <div class="footer-right">
+                            <button @click="settingsModalInstance.close()" class="btn btn-secondary">Cancel</button>
+                            <button @click="settingsModalInstance.saveConfig()" class="btn btn-primary" :disabled="settingsModalInstance.saving">
+                                <span x-show="!settingsModalInstance.saving">💾 Save Configuration</span>
+                                <span x-show="settingsModalInstance.saving">Saving...</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
     </div>
 
     <!-- Core Modules - Load first -->
@@ -997,6 +1209,8 @@
     <script src="/js/components/progress-dashboard.js"></script>
     <!-- Include Image Preview Component -->
     <script src="/js/components/image-preview.js"></script>
+    <!-- Include Settings Modal Component -->
+    <script src="/js/components/settings-modal.js"></script>
     <!-- Main App -->
     <script src="/js/app.js"></script>
 </body>

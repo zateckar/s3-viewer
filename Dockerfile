@@ -11,6 +11,9 @@ RUN bun install --production
 # Copy source code
 COPY . .
 
+# Create data directories for configuration and file storage persistence
+RUN mkdir -p /app/data /data/storage && chown -R bun:bun /app/data /data/storage
+
 # Expose the port the app runs on
 EXPOSE 3000
 

@@ -306,10 +306,54 @@ const BucketsAPI = {
   },
 };
 
+/**
+ * Config API endpoints
+ */
+const ConfigAPI = {
+  /**
+   * Get current configuration (masked)
+   * @returns {Promise<object>} Config response
+   */
+  async get() {
+    return apiRequest('GET', `${API_CONFIG.baseUrl}/config`);
+  },
+
+  /**
+   * Update configuration
+   * @param {object} config - Configuration object to update
+   * @returns {Promise<object>} Update response
+   */
+  async update(config) {
+    return apiRequest('PUT', `${API_CONFIG.baseUrl}/config`, config);
+  },
+
+  /**
+   * Reset configuration to defaults
+   * @returns {Promise<object>} Reset response
+   */
+  async reset() {
+    return apiRequest('DELETE', `${API_CONFIG.baseUrl}/config`);
+  },
+
+  /**
+   * Test configuration
+   * @param {string} type - Test type ('s3' or 'oidc')
+   * @param {object} config - Configuration to test
+   * @returns {Promise<object>} Test response
+   */
+  async test(type, config) {
+    return apiRequest('POST', `${API_CONFIG.baseUrl}/config/test`, {
+      type: type,
+      config: config
+    });
+  }
+};
+
 // Export to global scope
 window.APIError = APIError;
 window.apiRequest = apiRequest;
 window.apiRequestWithRetry = apiRequestWithRetry;
 window.FilesAPI = FilesAPI;
 window.BucketsAPI = BucketsAPI;
+window.ConfigAPI = ConfigAPI;
 window.API_CONFIG = API_CONFIG;
