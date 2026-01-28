@@ -166,7 +166,7 @@ export class ConfigManagerService {
       },
       localStorage: {
         enabled: false,
-        basePath: '/data/storage'
+        basePath: process.env.NODE_ENV === 'production' ? '/data/storage' : './data/storage'
       },
       auth: {
         local: {
@@ -204,7 +204,7 @@ export class ConfigManagerService {
       },
       localStorage: {
         enabled: process.env.LOCAL_STORAGE_ENABLED === 'true',
-        basePath: process.env.LOCAL_STORAGE_PATH || '/data/storage'
+        basePath: process.env.LOCAL_STORAGE_PATH || (process.env.NODE_ENV === 'production' ? '/data/storage' : './data/storage')
       },
       auth: {
         local: {

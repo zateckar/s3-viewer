@@ -13,7 +13,7 @@ class S3ClientPool {
   private static instance: S3ClientPool;
   private clients: Map<string, S3Client | LocalS3Client> = new Map();
   private readonly maxClients: number = 10;
-  private localStoragePath: string = '/data/storage';
+  private localStoragePath: string = process.env.NODE_ENV === 'production' ? '/data/storage' : './data/storage';
 
   private constructor() {}
 

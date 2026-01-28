@@ -9,9 +9,11 @@ export class ConfigStorageService {
   private readonly configPath: string;
 
   constructor() {
-    // The configuration should be stored in /app/data/.s3-viewer-config.json
-    // For local development, we'll use a relative path
-    this.configPath = './data/.s3-viewer-config.json';
+    // The configuration should be stored in /data/config/.s3-viewer-config.json
+    // Use environment variable if provided, otherwise default to absolute path for Docker
+    this.configPath = process.env.CONFIG_PATH || (process.env.NODE_ENV === 'production' 
+      ? '/data/config/.s3-viewer-config.json' 
+      : './data/config/.s3-viewer-config.json');
   }
 
   /**
