@@ -16,13 +16,12 @@
     "typecheck": "bun tsc --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@playwright/test": "^1.40.0"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "latest"
   },
   "dependencies": {
-    "alpinejs": "3.15.5"
+    "alpinejs": "latest"
   }
 }

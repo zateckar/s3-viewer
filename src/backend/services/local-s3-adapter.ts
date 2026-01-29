@@ -4,7 +4,8 @@
  * Implements the Bun S3Client interface for seamless integration
  */
 
-import { $ } from 'bun';
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync, Dirent } from 'fs';
+import { join, dirname } from 'path';
 
 /**
  * S3File interface - mimics Bun's S3 file object
@@ -114,10 +115,10 @@ export class LocalS3Client {
         const dir = filePath.slice(0, -1);
         await this.removeDir(dir);
       } else {
-        // Remove file
+        // Remove file using Node's fs module (cross-platform)
         const file = Bun.file(filePath);
         if (await file.exists()) {
-          await $`rm ${filePath}`.quiet();
+          rmSync(filePath, { force: true });
         }
       }
       console.log(`Deleted: ${key}`);
@@ -139,10 +140,14 @@ export class LocalS3Client {
     const maxKeys = options.maxKeys || 1000;
 
     try {
-      const baseDirPath = prefix ? this.getFullPath(prefix) : this.basePath;
-      const baseDir = Bun.file(baseDirPath);
+      const baseDirPath = prefix ? this.getFullPath(prefix) : this.getFullPath('');
+      
+      console.log(`[LocalS3Client] Listing directory: ${baseDirPath}`);
 
-      if (!(await baseDir.exists())) {
+      if (!existsSync(baseDirPath)) {
+        console.log(`[LocalS3Client] Directory does not exist: ${baseDirPath}`);
+        // Create the bucket directory if it doesn't exist
+        mkdirSync(baseDirPath, { recursive: true });
         return { contents: [], commonPrefixes: [] };
       }
 
@@ -150,37 +155,42 @@ export class LocalS3Client {
       const commonPrefixSet = new Set<string>();
       let count = 0;
 
-      // Read directory recursively or with delimiter
+      // Use Node.js fs.readdirSync with withFileTypes for directory listing
+      const entries = readdirSync(baseDirPath, { withFileTypes: true });
+      console.log(`[LocalS3Client] Found ${entries.length} entries in ${baseDirPath}`);
+
       if (delimiter) {
         // List only immediate children (like S3 delimiter behavior)
-        for await (const entry of baseDir.stream()!) {
+        for (const entry of entries) {
           if (count >= maxKeys) break;
 
           const entryName = entry.name;
-          const entryPath = `${baseDirPath}/${entryName}`;
-          const entryFile = Bun.file(entryPath);
-          const isDir = await entryFile.isDirectory?.();
+          const entryPath = join(baseDirPath, entryName);
 
-          if (isDir) {
+          if (entry.isDirectory()) {
             // Add as common prefix
             const prefixKey = prefix ? `${prefix}${entryName}/` : `${entryName}/`;
             commonPrefixSet.add(prefixKey);
+            console.log(`[LocalS3Client] Found directory: ${prefixKey}`);
           } else {
             // Add as file
-            const stat = await entryFile.stat?.();
+            const stat = statSync(entryPath);
             const key = prefix ? `${prefix}${entryName}` : entryName;
             contents.push({
               key,
-              size: stat?.size || 0,
-              lastModified: stat?.mtime || new Date(),
+              size: stat.size || 0,
+              lastModified: stat.mtime || new Date(),
             });
             count++;
+            console.log(`[LocalS3Client] Found file: ${key}`);
           }
         }
       } else {
         // Recursive listing without delimiter
-        await this.listRecursive(baseDirPath, prefix, contents, maxKeys - count);
+        this.listRecursiveSync(baseDirPath, prefix, contents, maxKeys - count);
       }
+
+      console.log(`[LocalS3Client] Returning ${contents.length} files, ${commonPrefixSet.size} prefixes`);
 
       return {
         contents: contents.slice(0, maxKeys),
@@ -234,9 +244,9 @@ export class LocalS3Client {
 
   private async ensureDir(dirPath: string): Promise<void> {
     try {
-      const dir = Bun.file(dirPath);
-      if (!(await dir.exists())) {
-        await $`mkdir -p ${dirPath}`.quiet();
+      // Use Node's fs module for cross-platform compatibility
+      if (!existsSync(dirPath)) {
+        mkdirSync(dirPath, { recursive: true });
       }
     } catch (error) {
       console.error(`Error creating directory ${dirPath}:`, error);
@@ -246,42 +256,48 @@ export class LocalS3Client {
 
   private async removeDir(dirPath: string): Promise<void> {
     try {
-      await $`rm -rf ${dirPath}`.quiet();
+      // Use Node's fs module for cross-platform compatibility
+      if (existsSync(dirPath)) {
+        rmSync(dirPath, { recursive: true, force: true });
+      }
     } catch (error) {
       console.error(`Error removing directory ${dirPath}:`, error);
       throw error;
     }
   }
 
-  private async listRecursive(
+  private listRecursiveSync(
     dirPath: string,
     prefix: string,
     contents: Array<{ key: string; size: number; lastModified: Date }>,
     maxCount: number
-  ): Promise<void> {
+  ): void {
     if (contents.length >= maxCount) return;
 
     try {
-      const dir = Bun.file(dirPath);
-      for await (const entry of dir.stream()!) {
+      const entries = readdirSync(dirPath, { withFileTypes: true });
+      
+      for (const entry of entries) {
         if (contents.length >= maxCount) break;
 
-        const entryPath = `${dirPath}/${entry.name}`;
-        const entryFile = Bun.file(entryPath);
-        const isDir = await entryFile.isDirectory?.();
+        const entryPath = join(dirPath, entry.name);
 
-        if (isDir) {
+        if (entry.isDirectory()) {
           // Recurse into directory
-          const relPath = entryPath.substring(this.basePath.length + 1 + this.bucket.length);
-          await this.listRecursive(entryPath, relPath, contents, maxCount - contents.length);
+          const bucketPath = this.getFullPath('');
+          const relPath = entryPath.substring(bucketPath.length);
+          this.listRecursiveSync(entryPath, relPath, contents, maxCount - contents.length);
         } else {
           // Add file
-          const stat = await entryFile.stat?.();
-          const relPath = entryPath.substring(this.basePath.length + 1 + this.bucket.length);
+          const stat = statSync(entryPath);
+          const bucketPath = this.getFullPath('');
+          const relPath = entryPath.substring(bucketPath.length);
+          // Remove leading slash if present
+          const key = relPath.startsWith('/') ? relPath.substring(1) : relPath;
           contents.push({
-            key: relPath,
-            size: stat?.size || 0,
-            lastModified: stat?.mtime || new Date(),
+            key,
+            size: stat.size || 0,
+            lastModified: stat.mtime || new Date(),
           });
         }
       }

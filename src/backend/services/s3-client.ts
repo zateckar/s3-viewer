@@ -39,9 +39,13 @@ class S3ClientPool {
       }
     }
 
-    // Check if this is a local storage bucket (no S3 endpoint configured or bucket starts with 'local-')
-    if (!s3Config?.endpoint || bucket.startsWith('local-')) {
-      const localBucketName = bucket.replace(/^local-/, '');
+    // Check if this is a local storage bucket
+    // 1. No S3 endpoint configured (empty string)
+    // 2. Bucket name is "local-storage"
+    // 3. Bucket name starts with 'local-'
+    if (!s3Config?.endpoint || bucket === 'local-storage' || bucket.startsWith('local-')) {
+      // For "local-storage", use it as-is. For others starting with "local-", remove the prefix
+      const localBucketName = bucket === 'local-storage' ? bucket : bucket.replace(/^local-/, '');
       const client = new LocalS3Client(this.localStoragePath, localBucketName);
       this.clients.set(bucket, client);
       return client;
@@ -187,6 +191,7 @@ export class S3Service {
   private currentBucket: string;
   private clientPool: S3ClientPool;
   private config: any = null;
+  private localStorageBucketName = 'local-storage';
 
   constructor(config?: any) {
     this.config = config;
@@ -202,7 +207,12 @@ export class S3Service {
   }
 
   getAvailableBuckets(): string[] {
-    return this.config?.s3?.bucketNames || [];
+    const buckets = this.config?.s3?.bucketNames || [];
+    // Add local storage bucket if enabled
+    if (this.config?.localStorage?.enabled) {
+      return [...buckets, this.localStorageBucketName];
+    }
+    return buckets;
   }
 
   getCurrentBucket(): string {
@@ -289,6 +299,7 @@ export class S3Service {
     const bucketInfos: BucketInfo[] = [];
     const config = await this.getConfig();
     
+    // Validate S3 buckets
     for (let i = 0; i < config.s3.bucketNames.length; i++) {
       const bucketName = config.s3.bucketNames[i];
       const isAccessible = await this.validateBucket(bucketName);
@@ -296,6 +307,17 @@ export class S3Service {
       bucketInfos.push({
         name: bucketName,
         isDefault: i === 0,
+        isAccessible,
+        lastValidated: new Date()
+      });
+    }
+    
+    // Add local storage bucket if enabled
+    if (config.localStorage?.enabled) {
+      const isAccessible = await this.validateBucket(this.localStorageBucketName);
+      bucketInfos.push({
+        name: this.localStorageBucketName,
+        isDefault: false,
         isAccessible,
         lastValidated: new Date()
       });
@@ -470,7 +492,7 @@ export class S3Service {
     console.log(`=� Creating S3 folder object with key: "${folderKey}" in bucket: "${bucket || this.currentBucket}"`);
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Create a .folder marker file inside the folder
       // This ensures the folder appears in commonPrefixes when listing
       // (Some S3-compatible servers like SeaweedFS strip trailing slashes from folder markers)
@@ -495,7 +517,7 @@ export class S3Service {
     const key = path.startsWith('/') ? path.substring(1) : path;
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       await client.delete(key);
       
       // Invalidate cache
@@ -528,7 +550,7 @@ export class S3Service {
         throw new Error('Unsupported data type for upload');
       }
 
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Bun's S3 client.write accepts body and contentType options
       await client.write(key, body, {
         contentType: contentType || 'application/octet-stream',
@@ -593,7 +615,7 @@ export class S3Service {
 
       console.log(`Uploading chunked file: ${key}, total size: ${combinedData.byteLength} bytes`);
 
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Upload the combined data
       await client.write(key, combinedData, {
         contentType: 'application/octet-stream',
@@ -621,7 +643,7 @@ export class S3Service {
     const key = path.startsWith('/') ? path.substring(1) : path;
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Get file object using Bun's S3 client
       const file = client.file(key);
       
@@ -719,7 +741,7 @@ export class S3Service {
     const key = path.startsWith('/') ? path.substring(1) : path;
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Get file object using Bun's S3 client
       const file = client.file(key);
       
@@ -840,7 +862,7 @@ export class S3Service {
     }
 
     try {
-      const client = this.getS3Client(bucket);
+      const client = await this.getS3Client(bucket);
       // Get file object using Bun's S3 client
       const file = client.file(key);
       
