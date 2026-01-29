@@ -1,4 +1,4 @@
-import { config } from '../utils/config';
+import { getConfig } from '../config/context';
 
 /**
  * Error Codes Enumeration - Backend specific
@@ -283,6 +283,7 @@ export function createErrorResponse(
   const errorCode = code as ErrorCode;
   const statusCode = status || ERROR_STATUS_CODES[errorCode] || 400;
   const retryable = RETRYABLE_ERRORS.has(errorCode);
+  const config = getConfig();
 
   const response: ApiResponse = {
     success: false,
@@ -311,6 +312,7 @@ export function createErrorResponse(
  * Creates an error response from an AppError instance
  */
 export function createAppErrorResponse(error: AppError): Response {
+  const config = getConfig();
   const response: ApiResponse = {
     success: false,
     error: {
@@ -352,6 +354,7 @@ const S3_ERROR_MAPPING: Record<string, { code: ErrorCode; message: string }> = {
  * Handles errors and returns appropriate error responses
  */
 export function handleError(error: any): Response {
+  const config = getConfig();
   // Log error for debugging
   console.error('Error occurred:', {
     name: error?.name,

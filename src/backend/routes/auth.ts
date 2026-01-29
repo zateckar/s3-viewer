@@ -1,10 +1,12 @@
-import { config } from '../utils/config';
+import { getConfig } from '../config/context';
+import { createJWT } from '../middleware/auth';
 
 /**
  * Handle Auth Requests
  */
 export async function handleAuthRequest(request: Request, path: string[]): Promise<Response> {
   const method = request.method;
+  const config = getConfig();
 
   // GET /api/v1/auth/config
   if (path[0] === 'config' && method === 'GET') {
@@ -31,7 +33,7 @@ export async function handleAuthRequest(request: Request, path: string[]): Promi
     const { username, password } = await request.json();
 
     if (username === config.auth.local.user && password === config.auth.local.pass) {
-      const token = generateJWT({ sub: 'local-admin', username: 'admin', provider: 'local' });
+      const token = await createJWT({ sub: 'local-admin', username: 'admin', provider: 'local' });
       return new Response(JSON.stringify({ token, user: { username: 'admin', provider: 'local' } }), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -55,7 +57,7 @@ export async function handleAuthRequest(request: Request, path: string[]): Promi
         // In production, use a library like 'openid-client' or fetch() to the token endpoint
         console.log(`Simulating OIDC exchange for code: ${code}`);
         
-        const token = generateJWT({ 
+        const token = await createJWT({ 
             sub: 'oidc-user-123', 
             username: 'oidc-user', 
             email: 'user@example.com', 
@@ -76,18 +78,3 @@ export async function handleAuthRequest(request: Request, path: string[]): Promi
   return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
 }
 
-/**
- * Simple JWT Generator (Mock)
- */
-function generateJWT(payload: any): string {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '');
-  const extendedPayload = {
-    ...payload,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24h
-  };
-  const payloadEncoded = btoa(JSON.stringify(extendedPayload)).replace(/=/g, '');
-  const signature = btoa('signature-placeholder').replace(/=/g, ''); // Mock signature
-  
-  return `${header}.${payloadEncoded}.${signature}`;
-}

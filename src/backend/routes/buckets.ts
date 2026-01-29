@@ -36,7 +36,7 @@ export async function handleBucketsRequest(request: Request): Promise<Response> 
  */
 async function handleGetBuckets(): Promise<Response> {
   try {
-    const buckets = s3Service.getAvailableBuckets();
+    const buckets = await s3Service.getAvailableBuckets();
     const currentBucket = s3Service.getCurrentBucket();
     
     return createSuccessResponse({
@@ -83,7 +83,7 @@ async function handleSwitchBucket(request: Request): Promise<Response> {
     }
     
     // Validate bucket exists in configuration
-    const availableBuckets = s3Service.getAvailableBuckets();
+    const availableBuckets = await s3Service.getAvailableBuckets();
     if (!availableBuckets.includes(bucketName)) {
       return createErrorResponse('BUCKET_NOT_FOUND', `Bucket '${bucketName}' not found in configuration`, null, 404);
     }
@@ -97,7 +97,7 @@ async function handleSwitchBucket(request: Request): Promise<Response> {
     }
     
     // Switch the bucket
-    s3Service.setCurrentBucket(bucketName);
+    await s3Service.setCurrentBucket(bucketName);
     
     return createSuccessResponse({
       switchedTo: bucketName,

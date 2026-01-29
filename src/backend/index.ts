@@ -1,4 +1,4 @@
-import { configManager } from './services/config-manager';
+import { initializeConfig, configManager } from './config/context';
 import { handleFilesRequest } from './routes/files';
 import { handleConfigRequest } from './routes/config';
 import { handleBucketsRequest } from './routes/buckets';
@@ -11,7 +11,8 @@ import { authenticate, unauthorizedResponse } from './middleware/auth';
  * Main server instance
  */
 // Initialize configuration
-const config = await configManager.loadConfig();
+console.log('🔧 Initializing configuration...');
+const config = await initializeConfig();
 
 const server = Bun.serve({
   port: config.app.port,

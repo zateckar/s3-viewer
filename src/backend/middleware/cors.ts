@@ -1,7 +1,8 @@
-import { config } from '../utils/config';
+import { getConfig } from '../config/context';
 
 export function corsMiddleware(request: Request): Response {
   const origin = request.headers.get('origin');
+  const config = getConfig();
   const responseHeaders: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -30,6 +31,7 @@ export function corsMiddleware(request: Request): Response {
  */
 export function addCorsHeaders(response: Response, request: Request): Response {
   const origin = request.headers.get('origin');
+  const config = getConfig();
   const responseHeaders = new Headers(response.headers);
 
   // Check if the origin is allowed
