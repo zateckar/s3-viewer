@@ -1,4 +1,4 @@
-# S3 File Browser
+# S3 File Browser named Buckly
 
 A web interface for managing files across multiple S3 buckets.
 

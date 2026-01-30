@@ -142,8 +142,6 @@ export class LocalS3Client {
     try {
       const baseDirPath = prefix ? this.getFullPath(prefix) : this.getFullPath('');
       
-      console.log(`[LocalS3Client] Listing directory: ${baseDirPath}`);
-
       if (!existsSync(baseDirPath)) {
         console.log(`[LocalS3Client] Directory does not exist: ${baseDirPath}`);
         // Create the bucket directory if it doesn't exist
@@ -157,7 +155,6 @@ export class LocalS3Client {
 
       // Use Node.js fs.readdirSync with withFileTypes for directory listing
       const entries = readdirSync(baseDirPath, { withFileTypes: true });
-      console.log(`[LocalS3Client] Found ${entries.length} entries in ${baseDirPath}`);
 
       if (delimiter) {
         // List only immediate children (like S3 delimiter behavior)
@@ -171,7 +168,6 @@ export class LocalS3Client {
             // Add as common prefix
             const prefixKey = prefix ? `${prefix}${entryName}/` : `${entryName}/`;
             commonPrefixSet.add(prefixKey);
-            console.log(`[LocalS3Client] Found directory: ${prefixKey}`);
           } else {
             // Add as file
             const stat = statSync(entryPath);
@@ -182,15 +178,12 @@ export class LocalS3Client {
               lastModified: stat.mtime || new Date(),
             });
             count++;
-            console.log(`[LocalS3Client] Found file: ${key}`);
           }
         }
       } else {
         // Recursive listing without delimiter
         this.listRecursiveSync(baseDirPath, prefix, contents, maxKeys - count);
       }
-
-      console.log(`[LocalS3Client] Returning ${contents.length} files, ${commonPrefixSet.size} prefixes`);
 
       return {
         contents: contents.slice(0, maxKeys),

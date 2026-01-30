@@ -20,7 +20,7 @@
     --skoda-border: #dee2e6;        /* Light borders */
     --skoda-border-dark: #ced4da;   /* Darker borders */
     --skoda-font-primary: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    --skoda-font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+    --skoda-font-mono: 'SF Mono', Monaco, 'Roboto Mono', Consolas, monospace;
     --skoda-transition: all 0.2s ease;
     --skoda-transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --border-radius: 8px;
@@ -3207,9 +3207,411 @@ body {
     }
 }
 
+/* Vanilla JS Image Preview Modal Styles */
+.image-preview-modal-vanilla {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.image-preview-modal-vanilla.visible {
+    opacity: 1;
+}
+
+.image-preview-modal-vanilla .image-preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: transparent;
+    z-index: 1;
+}
+
+.image-preview-modal-vanilla .image-preview-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.image-preview-modal-vanilla .image-preview-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 10;
+    color: white;
+}
+
+.image-preview-modal-vanilla .image-preview-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.image-preview-modal-vanilla .image-title {
+    margin: 0 0 8px 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.image-preview-modal-vanilla .image-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.image-preview-modal-vanilla .image-preview-controls {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    gap: 4px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+
+.image-preview-modal-vanilla .image-preview-controls:hover {
+    opacity: 1;
+}
+
+.image-preview-modal-vanilla .control-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.image-preview-modal-vanilla .control-group:not(:last-child) {
+    padding-right: 8px;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.image-preview-modal-vanilla .zoom-indicator {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2c3e50;
+    min-width: 40px;
+    text-align: center;
+}
+
+.image-preview-modal-vanilla .image-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    tabindex: 0;
+}
+
+.image-preview-modal-vanilla .image-viewport.panning {
+    cursor: grabbing;
+}
+
+.image-preview-modal-vanilla .image-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    will-change: transform;
+}
+
+.image-preview-modal-vanilla .preview-image {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    border-radius: 4px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    object-fit: contain;
+}
+
+.image-preview-modal-vanilla .image-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    z-index: 5;
+    color: white;
+}
+
+.image-preview-modal-vanilla .image-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 40px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    max-width: 400px;
+    text-align: center;
+    z-index: 5;
+}
+
+.image-preview-modal-vanilla .image-error h4 {
+    color: #2c3e50;
+    margin: 0 0 8px 0;
+}
+
+.image-preview-modal-vanilla .image-error .error-message {
+    color: #666;
+    margin: 0 0 16px 0;
+}
+
+.image-preview-modal-vanilla .image-navigation {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 8px 16px;
+    border-radius: 20px;
+    color: white;
+    font-size: 14px;
+    z-index: 10;
+}
+
+.image-preview-modal-vanilla .image-counter {
+    font-weight: 500;
+}
+
+.image-preview-modal-vanilla .nav-btn {
+    background-color: rgba(255, 255, 255, 0.2);
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: white;
+    font-size: 18px;
+}
+
+.image-preview-modal-vanilla .nav-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.image-preview-modal-vanilla .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.image-preview-modal-vanilla .image-info-panel {
+    position: absolute;
+    right: -400px;
+    top: 80px;
+    bottom: 20px;
+    width: 380px;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 8px 0 0 8px;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 9;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+}
+
+.image-preview-modal-vanilla .image-info-panel:not([style*="display: none"]) {
+    right: 0;
+}
+
+.image-preview-modal-vanilla .info-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.image-preview-modal-vanilla .info-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.image-preview-modal-vanilla .info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.image-preview-modal-vanilla .info-item:last-child {
+    border-bottom: none;
+}
+
+.image-preview-modal-vanilla .info-item label {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.9rem;
+    min-width: 80px;
+}
+
+.image-preview-modal-vanilla .info-item span {
+    color: #666;
+    font-size: 0.9rem;
+    text-align: right;
+    word-break: break-all;
+}
+
+.image-preview-modal-vanilla .path-text {
+    font-family: monospace;
+    font-size: 0.8rem;
+}
+
+.image-preview-modal-vanilla .image-preview-toolbar {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+}
+
+.image-preview-modal-vanilla .toolbar-left,
+.image-preview-modal-vanilla .toolbar-right {
+    display: flex;
+    gap: 8px;
+}
+
+.image-preview-modal-vanilla .keyboard-help-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+}
+
+.image-preview-modal-vanilla .keyboard-help-overlay:not([style*="display: none"]) {
+    display: flex;
+}
+
+.image-preview-modal-vanilla .keyboard-help-content {
+    background-color: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.image-preview-modal-vanilla .shortcuts-grid {
+    display: grid;
+    gap: 8px;
+}
+
+.image-preview-modal-vanilla .shortcut-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.image-preview-modal-vanilla .shortcut-item:last-child {
+    border-bottom: none;
+}
+
+.image-preview-modal-vanilla .shortcut-item kbd {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #495057;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Button states for vanilla modal */
+.image-preview-modal-vanilla .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.image-preview-modal-vanilla .btn-active {
+    background-color: var(--skoda-primary);
+    color: white;
+    border-color: var(--skoda-primary);
+}
+
+/* Responsive adjustments for vanilla modal */
+@media (max-width: 768px) {
+    .image-preview-modal-vanilla .image-info-panel {
+        width: 100%;
+        right: -100%;
+        border-radius: 0;
+    }
+    
+    .image-preview-modal-vanilla .image-info-panel:not([style*="display: none"]) {
+        right: 0;
+    }
+    
+    .image-preview-modal-vanilla .image-preview-toolbar {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+    }
+    
+    .image-preview-modal-vanilla .control-group {
+        flex-wrap: wrap;
+    }
+}
+
 /* Print Styles */
 @media print {
     .image-preview-modal,
+    .image-preview-modal-vanilla,
     .keyboard-shortcuts-modal {
         display: none !important;
     }

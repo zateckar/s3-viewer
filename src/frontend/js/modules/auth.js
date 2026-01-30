@@ -131,13 +131,19 @@ window.Auth = {
      * Is Authenticated
      */
     isAuthenticated() {
-        return !!this.token;
+        return !!this.token && !this.isTokenExpired();
     },
 
     /**
      * Get Auth Header
      */
     getAuthHeader() {
+        // Check if token is expired before returning header
+        if (this.token && this.isTokenExpired()) {
+            console.warn('Token expired when getting auth header - logging out');
+            this.handleAuthError();
+            return {};
+        }
         return this.token ? { 'Authorization': `Bearer ${this.token}` } : {};
     },
 
@@ -175,9 +181,42 @@ window.Auth = {
             const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
                 return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
             }).join(''));
-            return JSON.parse(jsonPayload);
+            const payload = JSON.parse(jsonPayload);
+            
+            // Check if token is expired
+            const now = Math.floor(Date.now() / 1000);
+            if (payload.exp && payload.exp < now) {
+                console.warn('Token expired', { exp: payload.exp, now });
+                return null;
+            }
+            
+            // Check not before
+            if (payload.nbf && payload.nbf > now) {
+                console.warn('Token not yet valid', { nbf: payload.nbf, now });
+                return null;
+            }
+            
+            return payload;
         } catch (e) {
             return null;
         }
+    },
+
+    /**
+     * Check if current token is expired
+     */
+    isTokenExpired() {
+        if (!this.token) return true;
+        
+        const payload = this.decodeToken(this.token);
+        return !payload; // null means invalid/expired
+    },
+
+    /**
+     * Handle authentication errors (401 responses)
+     */
+    handleAuthError() {
+        console.warn('Authentication error detected, logging out...');
+        this.logout();
     }
 };

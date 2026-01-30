@@ -1,13 +1,11 @@
 /**
- * Main S3 File Browser Application
- * Modular Alpine.js-based file browser with support for uploads, downloads, and previews
+ * Main Buckly Application
  */
 document.addEventListener('alpine:initialized', () => {
-    console.log('S3 File Browser App Initialized');
+    console.log('Buckly App Initialized');
 });
 
 /**
- * File Browser Alpine.js Component
  * Main application state and methods
  */
 window.fileBrowserApp = {
@@ -111,38 +109,15 @@ window.fileBrowserApp = {
     },
     
     initializeImagePreview() {
-        if (!window.ImagePreviewComponent) return;
+        if (!window.ImagePreviewVanilla) return;
         
-        const imagePreviewComponent = window.ImagePreviewComponent();
+        // Use the new PhotoViewer-based image preview component
+        this.imagePreviewInstance = window.ImagePreviewVanilla;
         
-        // Fix: Re-initialize and focus on window focus to handle lost event listeners or state
-        window.addEventListener('focus', () => {
-            if (this.showImagePreview && this.imagePreviewInstance) {
-                console.log('🔄 Window refocused, ensuring image preview state...');
-                // Re-focus the viewport to ensure keyboard shortcuts work
-                const viewport = document.querySelector('.image-viewport');
-                if (viewport) viewport.focus();
-            }
-        });
-
-        // Set up two-way binding for showImagePreview state
-        Object.defineProperty(imagePreviewComponent, 'showImagePreview', {
-            get: () => this.showImagePreview,
-            set: (value) => { this.showImagePreview = value; }
-        });
-
-        // Set up binding for isAuthenticated to allow component to check auth state
-        Object.defineProperty(imagePreviewComponent, 'isAuthenticated', {
-            get: () => this.isAuthenticated
-        });
+        // Set the current bucket
+        this.imagePreviewInstance.currentBucket = this.currentBucket;
         
-        // Bind Alpine.js utilities
-        imagePreviewComponent.$refs = this.$refs;
-        imagePreviewComponent.$nextTick = this.$nextTick;
-        imagePreviewComponent.$el = this.$el;
-        
-        this.imagePreviewInstance = imagePreviewComponent;
-        window.imagePreviewComponent = this.imagePreviewInstance;
+        console.log('🖼️ PhotoViewer-based Image Preview initialized');
     },
     
     startTransferStatsUpdater() {
@@ -151,6 +126,16 @@ window.fileBrowserApp = {
     
     startDownloadCountUpdater() {
         setInterval(() => this.updateDownloadCount(), 1000);
+    },
+    
+    startTokenExpirationChecker() {
+        // Check token expiration every 30 seconds
+        setInterval(() => {
+            if (this.isAuthenticated && window.Auth && window.Auth.isTokenExpired()) {
+                console.warn('Token expired during periodic check - logging out');
+                window.Auth.handleAuthError();
+            }
+        }, 30000);
     },
     
     // ==================== Auth Operations ====================
@@ -228,6 +213,9 @@ window.fileBrowserApp = {
         
         // Start download count updater
         this.startDownloadCountUpdater();
+        
+        // Start token expiration checker
+        this.startTokenExpirationChecker();
     },
 
     // ==================== File Operations ====================
@@ -454,7 +442,7 @@ window.fileBrowserApp = {
         if (this.imagePreviewInstance) {
             try {
                 await this.imagePreviewInstance.openPreview(item);
-                this.showImagePreview = true;
+                // Don't set AlpineJS showImagePreview state since we use vanilla modal exclusively
             } catch (error) {
                 console.error('Failed to open image preview:', error);
                 this.notify('Failed to open image preview', 'error');
@@ -477,7 +465,7 @@ window.fileBrowserApp = {
         if (this.imagePreviewInstance) {
             try {
                 await this.imagePreviewInstance.openPreviewWithImages(imageItems, startIndex);
-                this.showImagePreview = true;
+                // Don't set AlpineJS showImagePreview state since we use vanilla modal exclusively
             } catch (error) {
                 console.error('Failed to open image preview:', error);
                 this.notify('Failed to open image preview', 'error');

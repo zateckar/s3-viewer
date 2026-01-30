@@ -54,6 +54,14 @@ async function apiRequest(method, url, data = null, options = {}) {
     const json = await response.json();
 
     if (!response.ok) {
+      // Handle 401 Unauthorized errors (expired/invalid tokens)
+      if (response.status === 401) {
+        console.warn('Received 401 Unauthorized response - logging out');
+        if (window.Auth && window.Auth.handleAuthError) {
+          window.Auth.handleAuthError();
+        }
+      }
+
       throw new APIError(
         json.error?.code || 'UNKNOWN_ERROR',
         json.error?.message || 'An error occurred',
@@ -242,6 +250,14 @@ const FilesAPI = {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(response);
           } else {
+            // Handle 401 Unauthorized errors
+            if (xhr.status === 401) {
+              console.warn('Received 401 Unauthorized response during upload - logging out');
+              if (window.Auth && window.Auth.handleAuthError) {
+                window.Auth.handleAuthError();
+              }
+            }
+            
             reject(new APIError(
               response.error?.code || 'UPLOAD_FAILED',
               response.error?.message || 'Upload failed',

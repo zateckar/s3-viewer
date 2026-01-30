@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>S3 File Browser - Professional File Management</title>
+    <title>Buckly</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/auth.css">
-
-
+    
+    <!-- PhotoViewer CSS -->
+    <link rel="stylesheet" href="/assets/css/photoviewer.min.css">
 
     <!-- Shared Utilities - Load first before other scripts -->
     <script src="shared-init.js"></script>
     
     <script defer src="/assets/js/alpine.min.js"></script>
+    <!-- PhotoViewer JS -->
+    <script src="/assets/js/photoviewer.min.js"></script>
 </head>
 <body>
     <div id="app" x-data="fileBrowserApp" x-init="init()">
@@ -23,7 +26,7 @@
                 <div class="login-header">
                     <div class="logo-large">
                         <img src="/favicon.svg" alt="S3 Viewer">
-                        <h2>S3 File Browser</h2>
+                        <h2>Buckly</h2>
                     </div>
                     <p>Please sign in to continue</p>
                 </div>
@@ -53,7 +56,6 @@
                         <div class="oidc-login">
                             <div class="divider" x-show="authConfig?.localEnabled"><span>OR</span></div>
                             <button @click="loginOIDC" class="btn btn-secondary btn-block oidc-btn">
-                                <img src="https://www.keycloak.org/resources/images/keycloak_logo_480x135.png" alt="Keycloak" class="oidc-logo">
                                 <span>Sign in with OIDC</span>
                             </button>
                         </div>
@@ -67,7 +69,7 @@
             <div class="container">
                 <div class="header-content">
                     <div class="logo">
-                        <h1>S3 File Browser</h1>
+                        <h1>Buckly</h1>
                     </div>
                     
                     <div class="header-right">
@@ -686,304 +688,8 @@
             </div>
         </div>
 
-        <!-- Image Preview Modal -->
-        <div x-show="showImagePreview"
-             class="image-preview-modal"
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             @keydown.escape="imagePreviewInstance && imagePreviewInstance.closePreview()"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="image-preview-title"
-             aria-describedby="image-preview-description">
-            
-            <div class="image-preview-overlay" @click="imagePreviewInstance && imagePreviewInstance.closePreview()"></div>
-            
-            <div class="image-preview-container" @click.stop>
-                <!-- Preview Header with Controls -->
-                <div class="image-preview-header">
-                    <div class="image-preview-info">
-                        <h3 id="image-preview-title" class="image-title" x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''"></h3>
-                        <div class="image-meta">
-                            <span class="image-size" x-text="formatFileSize(imagePreviewInstance && imagePreviewInstance.currentImage?.size || 0)"></span>
-                            <span class="image-dimensions" x-show="imagePreviewInstance && imagePreviewInstance.imageDimensions" x-text="imagePreviewInstance && imagePreviewInstance.imageDimensions"></span>
-                        </div>
-                    </div>
-                    
-                    <div class="image-preview-controls">
-                        <!-- Zoom Controls -->
-                        <div class="control-group zoom-controls">
-                            <button @click="imagePreviewInstance.zoomIn()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Zoom In"
-                                    :disabled="imagePreviewInstance && imagePreviewInstance.zoomLevel >= imagePreviewInstance.maxZoom"
-                                    aria-label="Zoom in">
-                                🔍+
-                            </button>
-                            <button @click="imagePreviewInstance.zoomOut()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Zoom Out"
-                                    :disabled="imagePreviewInstance && imagePreviewInstance.zoomLevel <= imagePreviewInstance.minZoom"
-                                    aria-label="Zoom out">
-                                🔍-
-                            </button>
-                            <button @click="imagePreviewInstance.resetZoom()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Reset Zoom"
-                                    aria-label="Reset zoom">
-                                🔄
-                            </button>
-                            <button @click="imagePreviewInstance.fitToScreen()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Fit to Screen"
-                                    aria-label="Fit to screen">
-                                📐
-                            </button>
-                            <span class="zoom-indicator" x-text="imagePreviewInstance && Math.round(imagePreviewInstance.zoomLevel * 100) + '%'"></span>
-                        </div>
-                        
-                        <!-- Rotation Controls -->
-                        <div class="control-group rotation-controls">
-                            <button @click="imagePreviewInstance.rotateLeft()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Rotate Left"
-                                    aria-label="Rotate left">
-                                ↺
-                            </button>
-                            <button @click="imagePreviewInstance.rotateRight()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Rotate Right"
-                                    aria-label="Rotate right">
-                                ↻
-                            </button>
-                        </div>
-                        
-                        <!-- File Actions -->
-                        <div class="control-group file-controls">
-                            <button @click="imagePreviewInstance.downloadImage()"
-                                    class="btn btn-primary btn-small"
-                                    title="Download Image"
-                                    aria-label="Download image">
-                                ⬇️
-                            </button>
-                            <button @click="imagePreviewInstance.openInNewTab()"
-                                    class="btn btn-secondary btn-small"
-                                    title="Open in New Tab"
-                                    aria-label="Open in new tab">
-                                🔗
-                            </button>
-                        </div>
-                        
-                        <!-- Close Button -->
-                        <button @click="imagePreviewInstance.closePreview()"
-                                class="btn btn-danger btn-small close-preview-btn"
-                                title="Close Preview"
-                                aria-label="Close image preview">
-                            ✕
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Image Viewport -->
-                <div class="image-viewport"
-                     @wheel.prevent="imagePreviewInstance && imagePreviewInstance.handleWheel($event)"
-                     @mousedown="imagePreviewInstance && imagePreviewInstance.startDrag($event)"
-                     @mousemove="imagePreviewInstance && imagePreviewInstance.drag($event)"
-                     @mouseup="imagePreviewInstance && imagePreviewInstance.endDrag()"
-                     @mouseleave="imagePreviewInstance && imagePreviewInstance.endDrag()"
-                     @touchstart="imagePreviewInstance && imagePreviewInstance.startTouch($event)"
-                     @touchmove="imagePreviewInstance && imagePreviewInstance.handleTouch($event)"
-                     @touchend="imagePreviewInstance && imagePreviewInstance.endTouch()"
-                     tabindex="0"
-                     role="region"
-                     aria-label="Image viewer">
-                    
-                    <!-- Loading State -->
-                    <div x-show="imagePreviewInstance && imagePreviewInstance.isLoading" class="image-loading">
-                        <div class="loading-spinner"></div>
-                        <p>Loading image...</p>
-                    </div>
-                    
-                    <!-- Error State -->
-                    <div x-show="imagePreviewInstance && imagePreviewInstance.hasError && !imagePreviewInstance.isClosing" class="image-error">
-                        <div class="error-icon">❌</div>
-                        <h4>Failed to load image</h4>
-                        <p x-text="imagePreviewInstance && imagePreviewInstance.errorMessage"></p>
-                        <button @click="imagePreviewInstance && imagePreviewInstance.retryLoad()" class="btn btn-primary btn-small">
-                            🔄 Retry
-                        </button>
-                    </div>
-                    
-                    <!-- Main Image Element -->
-                    <div x-show="imagePreviewInstance && !imagePreviewInstance.isLoading && !imagePreviewInstance.hasError && imagePreviewInstance.currentImage?.url" class="image-wrapper"
-                         :style="imagePreviewInstance && imagePreviewInstance.getImageTransformStyle()">
-                        <img x-ref="imageElement"
-                             x-show="imagePreviewInstance && imagePreviewInstance.currentImage?.url"
-                             :src="imagePreviewInstance && imagePreviewInstance.currentImage?.url || ''"
-                             :alt="imagePreviewInstance && imagePreviewInstance.currentImage?.name || 'Image preview'"
-                             @load="imagePreviewInstance && !imagePreviewInstance.isClosing && imagePreviewInstance.onImageLoad()"
-                             @error="imagePreviewInstance && !imagePreviewInstance.isClosing && imagePreviewInstance.onImageError($event)"
-                             draggable="false"
-                             class="preview-image"
-                             :data-image-path="imagePreviewInstance && imagePreviewInstance.currentImage?.path || ''"
-                             :data-image-name="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''">
-                    </div>
-                    
-                    <!-- Navigation Controls for Multiple Images -->
-                    <template x-if="imagePreviewInstance && imagePreviewInstance.hasMultipleImages">
-                        <div class="image-navigation">
-                            <button @click="imagePreviewInstance && imagePreviewInstance.previousImage()"
-                                    class="nav-btn nav-prev"
-                                    :disabled="!(imagePreviewInstance && imagePreviewInstance.hasPreviousImage)"
-                                    title="Previous Image"
-                                    aria-label="Previous image">
-                                ‹
-                            </button>
-                            <div class="image-counter">
-                                <span x-text="imagePreviewInstance && `${imagePreviewInstance.currentIndex + 1} / ${imagePreviewInstance.totalImages}`"></span>
-                            </div>
-                            <button @click="imagePreviewInstance && imagePreviewInstance.nextImage()"
-                                    class="nav-btn nav-next"
-                                    :disabled="!(imagePreviewInstance && imagePreviewInstance.hasNextImage)"
-                                    title="Next Image"
-                                    aria-label="Next image">
-                                ›
-                            </button>
-                        </div>
-                    </template>
-                </div>
-                
-                <!-- Image Information Panel -->
-                <div class="image-info-panel" x-show="imagePreviewInstance && imagePreviewInstance.showInfoPanel" x-transition>
-                    <div class="info-panel-content">
-                        <h4>Image Information</h4>
-                        <div class="info-grid">
-                            <div class="info-item">
-                                <label>Name:</label>
-                                <span x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.name || ''"></span>
-                            </div>
-                            <div class="info-item">
-                                <label>Size:</label>
-                                <span x-text="formatFileSize(imagePreviewInstance && imagePreviewInstance.currentImage?.size || 0)"></span>
-                            </div>
-                            <div class="info-item">
-                                <label>Dimensions:</label>
-                                <span x-text="imagePreviewInstance && imagePreviewInstance.imageDimensions || 'Unknown'"></span>
-                            </div>
-                            <div class="info-item">
-                                <label>Type:</label>
-                                <span x-text="imagePreviewInstance && imagePreviewInstance.getFileType(imagePreviewInstance.currentImage?.name)"></span>
-                            </div>
-                            <div class="info-item">
-                                <label>Path:</label>
-                                <span x-text="imagePreviewInstance && imagePreviewInstance.currentImage?.path || ''" class="path-text"></span>
-                            </div>
-                            <div class="info-item">
-                                <label>Modified:</label>
-                                <span x-text="formatDate(imagePreviewInstance && imagePreviewInstance.currentImage?.modified)"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Toolbar for Additional Controls -->
-                <div class="image-preview-toolbar">
-                    <div class="toolbar-left">
-                        <button @click="imagePreviewInstance && imagePreviewInstance.toggleInfoPanel()"
-                                class="btn btn-secondary btn-small"
-                                :class="{ 'btn-active': imagePreviewInstance && imagePreviewInstance.showInfoPanel }"
-                                title="Toggle Information Panel"
-                                aria-label="Toggle information panel">
-                            ℹ️ Info
-                        </button>
-                        <button @click="imagePreviewInstance && imagePreviewInstance.toggleFullscreen()"
-                                class="btn btn-secondary btn-small"
-                                title="Toggle Fullscreen"
-                                aria-label="Toggle fullscreen">
-                            ⛶ Fullscreen
-                        </button>
-                    </div>
-                    
-                    <div class="toolbar-right">
-                        <!-- Touch Gesture Indicators for Mobile -->
-                        <div class="gesture-indicators" x-show="imagePreviewInstance && imagePreviewInstance.isTouchDevice">
-                            <span class="gesture-hint">Pinch to zoom • Drag to pan</span>
-                        </div>
-                        
-                        <!-- Keyboard Shortcuts Help -->
-                        <button @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = !imagePreviewInstance.showKeyboardHelp)"
-                                class="btn btn-secondary btn-small"
-                                title="Keyboard Shortcuts"
-                                aria-label="Show keyboard shortcuts">
-                            ⌨️ Shortcuts
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Keyboard Shortcuts Help Modal -->
-                <div x-show="imagePreviewInstance && imagePreviewInstance.showKeyboardHelp"
-                     class="keyboard-help-overlay"
-                     x-transition
-                     @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = false)">
-                    <div class="keyboard-help-content" @click.stop>
-                        <h4>Keyboard Shortcuts</h4>
-                        <div class="shortcuts-grid">
-                            <div class="shortcut-item">
-                                <kbd>Escape</kbd>
-                                <span>Close preview</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>+</kbd> / <kbd>=</kbd>
-                                <span>Zoom in</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>-</kbd>
-                                <span>Zoom out</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>0</kbd>
-                                <span>Reset zoom</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>F</kbd>
-                                <span>Fit to screen</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>L</kbd>
-                                <span>Rotate left</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>R</kbd>
-                                <span>Rotate right</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>←</kbd> / <kbd>→</kbd>
-                                <span>Navigate images</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>D</kbd>
-                                <span>Download image</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>I</kbd>
-                                <span>Toggle info panel</span>
-                            </div>
-                            <div class="shortcut-item">
-                                <kbd>F11</kbd>
-                                <span>Toggle fullscreen</span>
-                            </div>
-                        </div>
-                        <button @click="imagePreviewInstance && (imagePreviewInstance.showKeyboardHelp = false)" class="btn btn-primary">
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Image Preview Modal - Replaced with PhotoViewer Library -->
+        <!-- PhotoViewer handles all modal functionality internally -->
 
         <!-- Settings Modal -->
         <template x-if="settingsModalInstance">
@@ -1207,8 +913,8 @@
     <script src="/js/components/download-progress.js"></script>
     <!-- Include Progress Dashboard -->
     <script src="/js/components/progress-dashboard.js"></script>
-    <!-- Include Image Preview Component -->
-    <script src="/js/components/image-preview.js"></script>
+    <!-- Include Image Preview Component - PhotoViewer-based -->
+    <script src="/js/components/image-preview-photoviewer.js"></script>
     <!-- Include Settings Modal Component -->
     <script src="/js/components/settings-modal.js"></script>
     <!-- Main App -->

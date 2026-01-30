@@ -84,6 +84,26 @@ export class ConfigManagerService {
    */
   async saveConfig(config: S3ViewerConfig): Promise<void> {
     try {
+      // Get current config to preserve actual credentials if incoming values are masked
+      const currentConfig = await this.getConfig();
+      
+      // Check if incoming values are masked and preserve actual values if they are
+      if (this.isValueMasked(config.s3.secretAccessKey)) {
+        config.s3.secretAccessKey = currentConfig.s3.secretAccessKey;
+      }
+      
+      if (this.isValueMasked(config.auth.local.pass)) {
+        config.auth.local.pass = currentConfig.auth.local.pass;
+      }
+      
+      if (config.auth.oidc.clientSecret && this.isValueMasked(config.auth.oidc.clientSecret)) {
+        config.auth.oidc.clientSecret = currentConfig.auth.oidc.clientSecret;
+      }
+      
+      if (this.isValueMasked(config.security.jwtSecret)) {
+        config.security.jwtSecret = currentConfig.security.jwtSecret;
+      }
+      
       // Validate configuration before saving
       this.validateConfig(config);
       
@@ -355,6 +375,13 @@ export class ConfigManagerService {
       return '*'.repeat(value?.length || 8);
     }
     return value.substring(0, 4) + '*'.repeat(value.length - 4);
+  }
+
+  /**
+   * Check if a value is masked (contains asterisks)
+   */
+  private isValueMasked(value: string): boolean {
+    return !value || value.includes('*') && value.length > 4;
   }
 }
 

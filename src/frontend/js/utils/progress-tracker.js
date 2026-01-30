@@ -650,6 +650,54 @@ class ProgressTracker {
     }
 
     /**
+     * Get global statistics
+     */
+    getGlobalStatistics() {
+        return {
+            ...this.globalStats,
+            activeTransferCount: this.activeTransfers.size,
+            totalBandwidthUsage: this.getBandwidthUsage().totalSpeed,
+            networkQuality: this.getNetworkQuality().quality
+        };
+    }
+
+    /**
+     * Pause all active transfers
+     */
+    pauseAllTransfers() {
+        const activeTransfers = Array.from(this.activeTransfers.values());
+        activeTransfers.forEach(transfer => {
+            this.pauseTransfer(transfer.id, 'Paused by user');
+        });
+        return activeTransfers.length;
+    }
+
+    /**
+     * Resume all paused transfers
+     */
+    resumeAllTransfers() {
+        const pausedTransfers = Array.from(this.transfers.values())
+            .filter(t => t.status === 'paused');
+        
+        pausedTransfers.forEach(transfer => {
+            this.resumeTransfer(transfer.id);
+        });
+        
+        return pausedTransfers.length;
+    }
+
+    /**
+     * Cancel all active transfers
+     */
+    cancelAllTransfers() {
+        const activeTransfers = Array.from(this.activeTransfers.values());
+        activeTransfers.forEach(transfer => {
+            this.cancelTransfer(transfer.id, 'Cancelled by user');
+        });
+        return activeTransfers.length;
+    }
+
+    /**
      * Destroy the progress tracker
      */
     destroy() {
